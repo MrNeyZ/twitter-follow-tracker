@@ -48,10 +48,14 @@ export function loadConfig(): AppConfig {
     throw new Error(`TWITTER_PROVIDER must be "twitterapiio" or "sorsa" (got "${provider}")`);
   }
 
-  // Followings page size per request (first page only). twitterapi.io floors
-  // followings responses to 20 (requesting <20 still returns and bills 20), so
-  // values below 20 do NOT reduce cost — 20 is the effective minimum. Lower
-  // POLL_INTERVAL or influencer count to cut spend, not this.
+  // Followings page size per request (first page only). The twitterapi.io
+  // followings endpoint has a minimum pageSize of 20: values below 20 are
+  // clamped/floored up to 20. Billing is per returned user, tiered by page
+  // size — 20–99 users = 3 credits/user — so the default pageSize=20 costs
+  // 60 credits per influencer poll. That is the cheapest useful setting:
+  // requesting <20 saves nothing (clamped to 20), and larger pages cost more
+  // in total despite a lower per-user rate. Lower POLL_INTERVAL or influencer
+  // count to cut spend, not this.
   const twitterApiPageSize = Number(optionalEnv('TWITTERAPI_PAGE_SIZE', '20'));
   if (!Number.isInteger(twitterApiPageSize) || twitterApiPageSize <= 0) {
     throw new Error('TWITTERAPI_PAGE_SIZE must be a positive integer');

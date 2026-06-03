@@ -73,6 +73,20 @@ The worker fetches following lists through a pluggable provider, selected by
   For the MVP, `getFollowing` fetches only the **first page** (newest follows
   appear first, which is enough for change detection); a periodic full
   re-baseline is future work — see Notes.
+
+  **Billing (followings endpoint):** charged per returned user, tiered by page
+  size —
+
+  | Users returned | Cost          |
+  | -------------- | ------------- |
+  | 20–99          | 3 credits/user |
+  | 100–199        | 2 credits/user |
+  | 200            | 1 credit/user  |
+
+  For polling, `TWITTERAPI_PAGE_SIZE=20` is cheapest: the endpoint's minimum
+  pageSize is 20 (lower values are clamped up to 20), so one poll costs 60
+  credits per influencer. Tune `POLL_INTERVAL_MINUTES` or the influencer count
+  to control spend, not the page size.
 - **`sorsa`** — the original [Sorsa](https://api.sorsa.io/) client, still
   available. Set `TWITTER_PROVIDER=sorsa` to use it.
 

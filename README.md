@@ -104,7 +104,7 @@ Only the selected provider's API key is required.
 | `TELEGRAM_BOT_TOKEN`     | yes      | Bot token from @BotFather.                                         |
 | `TELEGRAM_CHAT_ID`       | yes      | Target chat/channel id.                                            |
 | `DISCORD_WEBHOOK_URL`    | yes      | Discord channel incoming-webhook URL.                             |
-| `POLL_INTERVAL_MINUTES`  | no       | Cycle interval in minutes (default `15`).                         |
+| `POLL_INTERVAL_MINUTES`  | no       | Scheduler tick in minutes (default `15`). See [Tiered Polling](#tiered-polling) — accounts are polled per-tier, not every tick. |
 | `RUN_ONCE`               | no       | `true` runs a single cycle then exits (default `false`).          |
 | `DB_PATH`                | no       | SQLite file path (default `./data/tracker.db`).                   |
 
@@ -119,6 +119,77 @@ export const WATCHED_INFLUENCERS: WatchedInfluencer[] = [
   { username: 'cobie', userId: '123456789' }, // userId skips resolution
 ];
 ```
+
+## Tiered Polling
+
+To control cost, the worker does **not** poll every account on every cycle.
+Instead it wakes on a fixed schedule and each account is polled on its own
+cadence:
+
+- The worker wakes every `POLL_INTERVAL_MINUTES` — the **scheduler tick**.
+- Each watched account has a **tier** that sets its own polling interval.
+- On each tick an account is **skipped until it is due** (its interval has
+  elapsed since `last_checked_at`) — logged as `SKIP_NOT_DUE`.
+- `disabled` accounts are **never** polled — logged as `SKIP_DISABLED`.
+
+| Tier     | Interval |
+| -------- | -------- |
+| vip      | 10 min   |
+| normal   | 30 min   |
+| slow     | 60 min   |
+| disabled | never    |
+
+A missing `tier` defaults to `normal`; an optional per-account
+`pollIntervalMinutes` overrides its tier default. Set `POLL_INTERVAL_MINUTES`
+to the smallest tier interval you use (e.g. `10` if you have any `vip`
+accounts) so due accounts are polled close to on time.
+
+```ts
+export const WATCHED_INFLUENCERS: WatchedInfluencer[] = [
+  { username: 'VictoryHell_', label: 'self-test', tier: 'vip' },      // 10 min
+  { username: '0xuberM', label: 'crypto-watch', tier: 'disabled' },   // never
+  { username: 'astaso1', label: 'crypto-watch', tier: 'normal' },     // 30 min
+];
+```
+
+**Current example configuration:**
+
+- `VictoryHell_` → **vip** (10 min)
+- `0xuberM` → **disabled** (never)
+- all others → **normal** (30 min)
+
+### Cost model
+
+twitterapi.io bills the followings endpoint **per returned user**, tiered by
+page size:
+
+- The followings endpoint's **minimum page size is 20** — values below 20 are
+  clamped up to 20, so they do **not** reduce cost.
+- **20–99** returned users = **3 credits/user**.
+- The **cheapest useful poll = 60 credits** (20 users × 3 credits).
+
+Each poll therefore costs **60 credits per account**. Per-account monthly spend
+is modeled as `(1440 / interval_minutes) polls/day × 60 credits × 30 days`.
+
+**Example monthly estimate (current configuration):**
+
+| Accounts   | Interval | Polls/day | Credits/day |
+| ---------- | -------- | --------- | ----------- |
+| 1 vip      | 10 min   | 144       | 8,640       |
+| 6 normal   | 30 min   | 48 each   | 17,280      |
+| 1 disabled | never    | 0         | 0           |
+| **Total**  |          |           | **25,920**  |
+
+≈ **777,600 credits/month** ≈ **$7.78/month** (100,000 credits = $1).
+
+**Impact:** before tiered polling, all 8 accounts were polled on every tick. At
+a 10-minute cadence that is 8 × 144 × 60 × 30 ≈ **2,073,600 credits/month
+(~$20.74)**. Tiered polling — disabling one account and running the rest at
+30 min while keeping the `vip` account at 10 min — cuts that to:
+
+≈ **2,073,600 credits/month (~$20.74)**  →  ≈ **777,600 credits/month (~$7.78)**
+
+a ~62% reduction. (The worker logs this estimate at startup.)
 
 ## Run locally
 

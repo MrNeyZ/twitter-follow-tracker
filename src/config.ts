@@ -40,7 +40,9 @@ function optionalEnv(name: string, fallback: string): string {
 }
 
 export function loadConfig(): AppConfig {
-  const pollIntervalMinutes = Number(optionalEnv('POLL_INTERVAL_MINUTES', '15'));
+  // Scheduler tick. Default 10 = the smallest tier interval (vip), so every tier
+  // is polled on time; a larger tick would under-poll vip and skew the cost log.
+  const pollIntervalMinutes = Number(optionalEnv('POLL_INTERVAL_MINUTES', '10'));
   if (!Number.isFinite(pollIntervalMinutes) || pollIntervalMinutes <= 0) {
     throw new Error('POLL_INTERVAL_MINUTES must be a positive number');
   }

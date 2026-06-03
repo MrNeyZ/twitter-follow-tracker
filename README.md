@@ -106,7 +106,7 @@ Only the selected provider's API key is required.
 | `TELEGRAM_BOT_TOKEN`     | if telegram enabled | Bot token from @BotFather.                             |
 | `TELEGRAM_CHAT_ID`       | if telegram enabled | Target chat/channel id.                                |
 | `DISCORD_WEBHOOK_URL`    | if discord enabled  | Discord channel incoming-webhook URL.                  |
-| `POLL_INTERVAL_MINUTES`  | no       | Scheduler tick in minutes (default `15`). See [Tiered Polling](#tiered-polling) — accounts are polled per-tier, not every tick. |
+| `POLL_INTERVAL_MINUTES`  | no       | Scheduler tick in minutes (default `10`, the smallest tier interval). See [Tiered Polling](#tiered-polling) — accounts are polled per-tier, not every tick. |
 | `RUN_ONCE`               | no       | `true` runs a single cycle then exits (default `false`).          |
 | `DB_PATH`                | no       | SQLite file path (default `./data/tracker.db`).                   |
 

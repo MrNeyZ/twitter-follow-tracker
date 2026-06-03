@@ -132,7 +132,8 @@ async function processInfluencer(
       log(
         `  ${label}: alerted${highSignal ? ' [HIGH SIGNAL]' : ''} @${followed.username} ` +
           `[${classification.category}, projectScore=${classification.projectScore}, ` +
-          `score=${score.score}, verified=${score.verified}]`
+          `score=${score.score}, verified=${score.verified}] ` +
+          `reasons=[${classification.reasons.join('; ')}]`
       );
     } catch (err) {
       // Don't let one bad follow event abort the rest of the influencer's batch.

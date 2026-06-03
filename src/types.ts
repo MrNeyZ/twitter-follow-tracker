@@ -23,6 +23,13 @@ export interface FollowProvider {
   getFollowing(userId: string): Promise<SorsaUser[]>;
 }
 
+/**
+ * Polling tier for a watched account (cost control).
+ *   vip = 10 min, normal = 30 min, slow = 60 min, disabled = never poll.
+ * A missing tier is treated as 'normal'. See src/polling.ts.
+ */
+export type InfluencerTier = 'vip' | 'normal' | 'slow' | 'disabled';
+
 /** An influencer we watch, loaded from config. */
 export interface WatchedInfluencer {
   /** Twitter username/handle without the leading @. */
@@ -31,6 +38,10 @@ export interface WatchedInfluencer {
   userId?: string;
   /** Optional human label for logs/alerts. */
   label?: string;
+  /** Polling tier (cost control). Missing -> 'normal'. */
+  tier?: InfluencerTier;
+  /** Explicit per-account poll interval in minutes; overrides the tier default. */
+  pollIntervalMinutes?: number;
 }
 
 /** A detected new-follow event, after scoring. */

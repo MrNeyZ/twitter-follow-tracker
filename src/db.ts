@@ -93,6 +93,18 @@ export class Db {
       .run(isoTime, influencerId);
   }
 
+  /**
+   * Last poll time (ISO) for a watched account, looked up by username so the
+   * due-check can run BEFORE resolving a provider user id (no API call for
+   * skipped accounts). Returns null if never checked / not yet stored.
+   */
+  getLastCheckedAtByUsername(username: string): string | null {
+    const row = this.db
+      .prepare(`SELECT last_checked_at FROM watched_accounts WHERE username = ?`)
+      .get(username) as { last_checked_at: string | null } | undefined;
+    return row?.last_checked_at ?? null;
+  }
+
   /** Returns the set of followed_user_ids currently stored for an influencer. */
   getCurrentFollowingIds(influencerId: string): Set<string> {
     const rows = this.db

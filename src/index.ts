@@ -11,6 +11,13 @@ import {
   PROJECT_HIGH_SIGNAL_THRESHOLD,
 } from './scoring';
 import { AppConfig, WatchedInfluencer, SorsaUser, NewFollow, FollowProvider } from './types';
+import {
+  effectiveTier,
+  effectiveIntervalMinutes,
+  isDue,
+  estimateCost,
+  formatCostEstimate,
+} from './polling';
 
 /** Build the follow-data provider selected by config (TWITTER_PROVIDER). */
 function createProvider(cfg: AppConfig): FollowProvider {
@@ -165,10 +172,33 @@ async function runCycle(
     log('No influencers configured. Add entries to WATCHED_INFLUENCERS in src/config.ts.');
   }
 
+  // Tiered polling: the worker ticks on a fixed schedule, but each account is
+  // only polled once its own tier interval has elapsed since last_checked_at.
+  const nowMs = Date.now();
   for (const inf of cfg.influencers) {
     const label = inf.label ?? inf.username;
+    const tier = effectiveTier(inf);
+
+    if (tier === 'disabled') {
+      log(`SKIP_DISABLED @${inf.username} (${label})`);
+      continue;
+    }
+
+    const intervalMinutes = effectiveIntervalMinutes(inf) as number; // non-null: not disabled
+    const lastChecked = db.getLastCheckedAtByUsername(inf.username);
+    if (!isDue(lastChecked, intervalMinutes, nowMs)) {
+      log(
+        `SKIP_NOT_DUE @${inf.username} (tier=${tier}, interval=${intervalMinutes}m, ` +
+          `last_checked=${lastChecked})`
+      );
+      continue;
+    }
+
     try {
-      log(`Processing @${inf.username}${inf.label ? ` (${inf.label})` : ''}`);
+      log(
+        `Processing @${inf.username}${inf.label ? ` (${inf.label})` : ''} ` +
+          `[tier=${tier}, interval=${intervalMinutes}m]`
+      );
       await processInfluencer(inf, cfg, db, provider, telegram, discord);
     } catch (err) {
       // Isolate failures so one bad influencer never crashes the worker.
@@ -192,6 +222,7 @@ async function main(): Promise<void> {
   const db = new Db(cfg.dbPath);
   const provider = createProvider(cfg);
   log(`Provider: ${cfg.provider}`);
+  for (const line of formatCostEstimate(estimateCost(cfg.influencers))) log(line);
   const telegram = new TelegramAlerter(cfg.telegramBotToken, cfg.telegramChatId);
   const discord = new DiscordAlerter(cfg.discordWebhookUrl);
 

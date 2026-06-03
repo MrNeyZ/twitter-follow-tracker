@@ -13,15 +13,17 @@ dotenv.config();
  *   { username: 'VitalikButerin', label: 'Vitalik' },
  *   { username: 'cobie', userId: '123456789' },
  */
+// `tier` controls per-account polling cost (see src/polling.ts):
+//   vip = 10m, normal = 30m, slow = 60m, disabled = never. Missing -> normal.
 export const WATCHED_INFLUENCERS: WatchedInfluencer[] = [
-  { username: '0xuberM', label: 'crypto-watch' },
-  { username: 'f1racecar1', label: 'crypto-watch' },
-  { username: 'reznio_o', label: 'crypto-watch' },
-  { username: 'diamondARS_', label: 'crypto-watch' },
-  { username: 'gr3gor14n', label: 'crypto-watch' },
-  { username: 'airtightfish', label: 'crypto-watch' },
-  { username: 'astaso1', label: 'crypto-watch' },
-  { username: 'VictoryHell_', label: 'self-test' },
+  { username: '0xuberM', label: 'crypto-watch', tier: 'disabled' },
+  { username: 'f1racecar1', label: 'crypto-watch', tier: 'normal' },
+  { username: 'reznio_o', label: 'crypto-watch', tier: 'normal' },
+  { username: 'diamondARS_', label: 'crypto-watch', tier: 'normal' },
+  { username: 'gr3gor14n', label: 'crypto-watch', tier: 'normal' },
+  { username: 'airtightfish', label: 'crypto-watch', tier: 'normal' },
+  { username: 'astaso1', label: 'crypto-watch', tier: 'normal' },
+  { username: 'VictoryHell_', label: 'self-test', tier: 'vip' },
 ];
 
 function requireEnv(name: string): string {

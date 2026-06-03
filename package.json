@@ -13,6 +13,7 @@
     "once": "RUN_ONCE=true ts-node src/index.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test:scoring": "ts-node scripts/scoring-fixture-test.ts",
+    "test:polling": "ts-node scripts/polling-test.ts",
     "test:smoke": "npm run build && node smoke-test.js"
   },
   "dependencies": {

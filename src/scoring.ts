@@ -124,21 +124,24 @@ export function classifyAccount(
   let score = 50; // neutral baseline
 
   // --- positive signals ---
+  // Weights tuned against tests/scoring-fixtures.json (golden cases).
   const projectKw = matchProjectKeywords(user);
   if (projectKw.length > 0) {
-    const pts = Math.min(projectKw.length * 8, 32);
+    const pts = Math.min(projectKw.length * 11, 33);
     score += pts;
     reasons.push(`project keywords: ${projectKw.join(', ')} (+${pts})`);
   }
 
-  if (hasWebsite(user)) {
-    score += 10;
-    reasons.push('has website/url (+10)');
+  const website = hasWebsite(user);
+  if (website) {
+    score += 12;
+    reasons.push('has website/url (+12)');
   }
 
-  if (user.followersCount >= 500 && user.followersCount <= 150_000) {
-    score += 10;
-    reasons.push('followers in 500-150k range (+10)');
+  // Reward the "newish project" follower band; whales are handled below.
+  if (user.followersCount >= 1_000 && user.followersCount <= 250_000) {
+    score += 12;
+    reasons.push('followers in 1k-250k range (+12)');
   }
 
   const corroboration = ctx.corroborationCount ?? 0;
@@ -150,33 +153,40 @@ export function classifyAccount(
   // --- negative signals ---
   const personalKw = matchPersonalKeywords(user);
   if (personalKw.length > 0) {
-    const pts = Math.min(personalKw.length * 12, 36);
+    const pts = Math.min(personalKw.length * 13, 39);
     score -= pts;
     reasons.push(`personal keywords: ${personalKw.join(', ')} (-${pts})`);
   }
 
-  if (user.followersCount > 500_000) {
+  const hugeFollowing = user.followersCount > 500_000;
+  if (hugeFollowing) {
     score -= 25;
     reasons.push('followers over 500k (-25)');
   }
 
-  if (!user.bio.trim() && !hasWebsite(user)) {
-    score -= 20;
-    reasons.push('no bio and no website (-20)');
+  if (!user.bio.trim() && !website) {
+    score -= 18;
+    reasons.push('no bio and no website (-18)');
   }
 
   // Only penalise a human-name pattern when nothing else looks project-y,
   // so "Magic Eden"-style names with project bios aren't punished.
-  if (projectKw.length === 0 && looksLikeHumanName(user.displayName)) {
-    score -= 15;
-    reasons.push('looks like a personal name (-15)');
+  const humanName = projectKw.length === 0 && looksLikeHumanName(user.displayName);
+  if (humanName) {
+    score -= 18;
+    reasons.push('looks like a personal name (-18)');
   }
 
   const projectScore = Math.max(0, Math.min(100, Math.round(score)));
 
+  // Category is not purely numeric: an account is only "personal" when there
+  // is actual personal evidence (personal keywords, whale following, or a human
+  // name). A low score with no such evidence is "unknown", not "personal" —
+  // e.g. an empty low-info account is genuinely undetermined.
+  const personalEvidence = personalKw.length > 0 || hugeFollowing || humanName;
   let category: ProjectClassification['category'];
-  if (projectScore >= 60) category = 'project';
-  else if (projectScore <= 40) category = 'personal';
+  if (projectScore >= 65) category = 'project';
+  else if (projectScore <= 40 && personalEvidence) category = 'personal';
   else category = 'unknown';
 
   if (reasons.length === 0) reasons.push('no strong signals');

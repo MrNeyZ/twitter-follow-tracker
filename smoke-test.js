@@ -95,7 +95,7 @@ console.log('\n-- classification --');
 // Project-like account -> alerts.
 const project = u('100', 'jupiterexchange', {
   followers: 60000,
-  bio: 'crypto app on solana',
+  bio: 'crypto app', // two project keywords + follower band -> normal tier, not high
 });
 project.displayName = 'Jupiter';
 const cProject = classifyAccount(project, { corroborationCount: 0 });

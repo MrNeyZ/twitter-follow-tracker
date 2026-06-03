@@ -13,6 +13,16 @@ export interface SorsaUser {
   url?: string;
 }
 
+/**
+ * Common shape every follow-data provider must expose. Both SorsaProvider and
+ * TwitterApiIoProvider satisfy this structurally, so the worker can swap
+ * between them via config without code changes.
+ */
+export interface FollowProvider {
+  getUserByUsername(username: string): Promise<SorsaUser>;
+  getFollowing(userId: string): Promise<SorsaUser[]>;
+}
+
 /** An influencer we watch, loaded from config. */
 export interface WatchedInfluencer {
   /** Twitter username/handle without the leading @. */
@@ -52,9 +62,14 @@ export interface ProjectClassification {
   reasons: string[];
 }
 
+export type ProviderName = 'twitterapiio' | 'sorsa';
+
 export interface AppConfig {
+  provider: ProviderName;
   sorsaApiKey: string;
   sorsaBaseUrl: string;
+  twitterApiIoKey: string;
+  twitterApiIoBaseUrl: string;
   telegramBotToken: string;
   telegramChatId: string;
   discordWebhookUrl: string;

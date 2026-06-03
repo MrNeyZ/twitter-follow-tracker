@@ -43,9 +43,23 @@ export function loadConfig(): AppConfig {
     throw new Error('POLL_INTERVAL_MINUTES must be a positive number');
   }
 
+  const provider = optionalEnv('TWITTER_PROVIDER', 'twitterapiio').toLowerCase();
+  if (provider !== 'twitterapiio' && provider !== 'sorsa') {
+    throw new Error(`TWITTER_PROVIDER must be "twitterapiio" or "sorsa" (got "${provider}")`);
+  }
+
+  // Only the selected provider's API key is required; the other stays optional
+  // so a twitterapi.io-only setup doesn't need a Sorsa key (and vice versa).
   return {
-    sorsaApiKey: requireEnv('SORSA_API_KEY'),
+    provider,
+    sorsaApiKey:
+      provider === 'sorsa' ? requireEnv('SORSA_API_KEY') : optionalEnv('SORSA_API_KEY', ''),
     sorsaBaseUrl: optionalEnv('SORSA_BASE_URL', 'https://api.sorsa.io/v3'),
+    twitterApiIoKey:
+      provider === 'twitterapiio'
+        ? requireEnv('TWITTERAPI_IO_KEY')
+        : optionalEnv('TWITTERAPI_IO_KEY', ''),
+    twitterApiIoBaseUrl: optionalEnv('TWITTERAPI_IO_BASE_URL', 'https://api.twitterapi.io'),
     telegramBotToken: requireEnv('TELEGRAM_BOT_TOKEN'),
     telegramChatId: requireEnv('TELEGRAM_CHAT_ID'),
     discordWebhookUrl: requireEnv('DISCORD_WEBHOOK_URL'),

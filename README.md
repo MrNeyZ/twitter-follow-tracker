@@ -32,7 +32,8 @@ src/
   db.ts               SQLite layer (better-sqlite3)
   types.ts            shared types
   scoring.ts          placeholder relevance scoring
-  providers/sorsa.ts  Sorsa API client (defensive response normalization)
+  providers/sorsa.ts        Sorsa API client (defensive response normalization)
+  providers/twitterapiio.ts twitterapi.io client (default provider)
   alerts/telegram.ts  Telegram Bot API alerts
   alerts/discord.ts   Discord webhook alerts
 ecosystem.config.js   PM2 process definition
@@ -60,18 +61,38 @@ cp .env.example .env
 # edit .env with your real keys (never commit it)
 ```
 
+### Choose a provider
+
+The worker fetches following lists through a pluggable provider, selected by
+`TWITTER_PROVIDER`:
+
+- **`twitterapiio`** (default) — [twitterapi.io](https://twitterapi.io/),
+  pay-as-you-go, fully managed (no X account/cookies needed). Auth via the
+  `X-API-Key` header. The followings endpoint is **username-based**, so the
+  provider does not resolve a numeric user id (no extra credit spend per cycle).
+  For the MVP, `getFollowing` fetches only the **first page** (newest follows
+  appear first, which is enough for change detection); a periodic full
+  re-baseline is future work — see Notes.
+- **`sorsa`** — the original [Sorsa](https://api.sorsa.io/) client, still
+  available. Set `TWITTER_PROVIDER=sorsa` to use it.
+
+Only the selected provider's API key is required.
+
 ### Configure environment
 
-| Variable               | Required | Description                                            |
-| ---------------------- | -------- | ------------------------------------------------------ |
-| `SORSA_API_KEY`        | yes      | Sorsa API key (sent as the `ApiKey` header).           |
-| `SORSA_BASE_URL`       | no       | Defaults to `https://api.sorsa.io/v3`.                 |
-| `TELEGRAM_BOT_TOKEN`   | yes      | Bot token from @BotFather.                             |
-| `TELEGRAM_CHAT_ID`     | yes      | Target chat/channel id.                                |
-| `DISCORD_WEBHOOK_URL`  | yes      | Discord channel incoming-webhook URL.                  |
-| `POLL_INTERVAL_MINUTES`| no       | Cycle interval in minutes (default `15`).              |
-| `RUN_ONCE`             | no       | `true` runs a single cycle then exits (default `false`).|
-| `DB_PATH`              | no       | SQLite file path (default `./data/tracker.db`).        |
+| Variable                 | Required | Description                                                        |
+| ------------------------ | -------- | ----------------------------------------------------------------- |
+| `TWITTER_PROVIDER`       | no       | `twitterapiio` (default) or `sorsa`.                              |
+| `TWITTERAPI_IO_KEY`      | if twitterapiio | twitterapi.io key (sent as `X-API-Key`).                   |
+| `TWITTERAPI_IO_BASE_URL` | no       | Defaults to `https://api.twitterapi.io`.                          |
+| `SORSA_API_KEY`          | if sorsa | Sorsa API key (sent as the `ApiKey` header).                      |
+| `SORSA_BASE_URL`         | no       | Defaults to `https://api.sorsa.io/v3`.                            |
+| `TELEGRAM_BOT_TOKEN`     | yes      | Bot token from @BotFather.                                         |
+| `TELEGRAM_CHAT_ID`       | yes      | Target chat/channel id.                                            |
+| `DISCORD_WEBHOOK_URL`    | yes      | Discord channel incoming-webhook URL.                             |
+| `POLL_INTERVAL_MINUTES`  | no       | Cycle interval in minutes (default `15`).                         |
+| `RUN_ONCE`               | no       | `true` runs a single cycle then exits (default `false`).          |
+| `DB_PATH`                | no       | SQLite file path (default `./data/tracker.db`).                   |
 
 ### Configure the influencer list
 
@@ -128,6 +149,11 @@ and restarts on crash (not on a clean exit).
 
 ## Notes / next steps
 
+- **Full re-baseline (future work):** the twitterapi.io provider fetches only the
+  first page of followings per cycle. This catches new follows (which appear
+  first) but won't reconcile unfollows or anything beyond the first page. A
+  periodic (e.g. daily) full paginate-to-end re-baseline should be added later;
+  cost scales with following count, so it must not run every cycle.
 - The Sorsa response parser (`src/providers/sorsa.ts`) normalizes several common field
   aliases defensively. If the live payload differs, adjust `normalizeUser` /
   `extractUserList` / `extractNextCursor` in that one file.

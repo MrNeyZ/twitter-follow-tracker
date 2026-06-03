@@ -1,6 +1,7 @@
 import { loadConfig } from './config';
 import { Db } from './db';
 import { SorsaProvider } from './providers/sorsa';
+import { TwitterApiIoProvider } from './providers/twitterapiio';
 import { TelegramAlerter } from './alerts/telegram';
 import { DiscordAlerter } from './alerts/discord';
 import {
@@ -9,7 +10,15 @@ import {
   PROJECT_ALERT_THRESHOLD,
   PROJECT_HIGH_SIGNAL_THRESHOLD,
 } from './scoring';
-import { AppConfig, WatchedInfluencer, SorsaUser, NewFollow } from './types';
+import { AppConfig, WatchedInfluencer, SorsaUser, NewFollow, FollowProvider } from './types';
+
+/** Build the follow-data provider selected by config (TWITTER_PROVIDER). */
+function createProvider(cfg: AppConfig): FollowProvider {
+  if (cfg.provider === 'sorsa') {
+    return new SorsaProvider(cfg.sorsaApiKey, cfg.sorsaBaseUrl);
+  }
+  return new TwitterApiIoProvider(cfg.twitterApiIoKey, cfg.twitterApiIoBaseUrl);
+}
 
 function log(...args: unknown[]): void {
   console.log(`[${nowIso()}]`, ...args);
@@ -26,16 +35,16 @@ async function processInfluencer(
   inf: WatchedInfluencer,
   cfg: AppConfig,
   db: Db,
-  sorsa: SorsaProvider,
+  provider: FollowProvider,
   telegram: TelegramAlerter,
   discord: DiscordAlerter
 ): Promise<void> {
   const label = inf.label ?? inf.username;
 
-  // 1. Resolve username -> Sorsa user id if not already provided.
+  // 1. Resolve username -> provider user id if not already provided.
   let influencerId = inf.userId;
   if (!influencerId) {
-    const resolved = await sorsa.getUserByUsername(inf.username);
+    const resolved = await provider.getUserByUsername(inf.username);
     influencerId = resolved.id;
     if (!influencerId) {
       throw new Error(`Could not resolve user id for @${inf.username}`);
@@ -45,7 +54,7 @@ async function processInfluencer(
   db.upsertWatchedAccount(influencerId, inf);
 
   // 2. Fetch current following list.
-  const following = await sorsa.getFollowing(influencerId);
+  const following = await provider.getFollowing(influencerId);
   log(`  ${label}: following count = ${following.length}`);
 
   const isoTime = nowIso();
@@ -142,7 +151,7 @@ async function dispatchAlerts(
 async function runCycle(
   cfg: AppConfig,
   db: Db,
-  sorsa: SorsaProvider,
+  provider: FollowProvider,
   telegram: TelegramAlerter,
   discord: DiscordAlerter
 ): Promise<void> {
@@ -156,7 +165,7 @@ async function runCycle(
     const label = inf.label ?? inf.username;
     try {
       log(`Processing @${inf.username}${inf.label ? ` (${inf.label})` : ''}`);
-      await processInfluencer(inf, cfg, db, sorsa, telegram, discord);
+      await processInfluencer(inf, cfg, db, provider, telegram, discord);
     } catch (err) {
       // Isolate failures so one bad influencer never crashes the worker.
       errLog(`Influencer "${label}" failed:`, asMessage(err));
@@ -177,7 +186,8 @@ function sleep(ms: number): Promise<void> {
 async function main(): Promise<void> {
   const cfg = loadConfig();
   const db = new Db(cfg.dbPath);
-  const sorsa = new SorsaProvider(cfg.sorsaApiKey, cfg.sorsaBaseUrl);
+  const provider = createProvider(cfg);
+  log(`Provider: ${cfg.provider}`);
   const telegram = new TelegramAlerter(cfg.telegramBotToken, cfg.telegramChatId);
   const discord = new DiscordAlerter(cfg.discordWebhookUrl);
 
@@ -193,7 +203,7 @@ async function main(): Promise<void> {
   process.on('SIGTERM', () => shutdown('SIGTERM'));
 
   if (cfg.runOnce) {
-    await runCycle(cfg, db, sorsa, telegram, discord);
+    await runCycle(cfg, db, provider, telegram, discord);
     db.close();
     return;
   }
@@ -204,7 +214,7 @@ async function main(): Promise<void> {
   // Run forever: one cycle, sleep, repeat. A thrown cycle is logged, not fatal.
   while (!shuttingDown) {
     try {
-      await runCycle(cfg, db, sorsa, telegram, discord);
+      await runCycle(cfg, db, provider, telegram, discord);
     } catch (err) {
       errLog('Cycle crashed unexpectedly:', asMessage(err));
     }

@@ -102,6 +102,20 @@ export class Db {
   }
 
   /**
+   * How many distinct watched influencers currently follow this account.
+   * Used as a corroboration signal in project scoring. (current_following has
+   * a (influencer_id, followed_user_id) primary key, so COUNT(*) == #influencers.)
+   */
+  countInfluencersFollowing(followedUserId: string): number {
+    const row = this.db
+      .prepare(
+        `SELECT COUNT(*) AS c FROM current_following WHERE followed_user_id = ?`
+      )
+      .get(followedUserId) as { c: number };
+    return row.c;
+  }
+
+  /**
    * Replace the stored following snapshot for an influencer with the given set.
    * Done in a transaction so a crash can't leave a half-written snapshot.
    */

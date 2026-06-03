@@ -147,6 +147,12 @@ export function normalizeUser(raw: any): SorsaUser {
     raw?.verified ?? raw?.is_blue_verified ?? raw?.isBlueVerified ?? raw?.is_verified ?? false
   );
   const bio = String(raw?.description ?? raw?.bio ?? raw?.profile_bio ?? '');
+  const urlRaw =
+    raw?.url ??
+    raw?.website ??
+    raw?.entities?.url?.urls?.[0]?.expanded_url ??
+    raw?.profile_url;
+  const url = urlRaw ? String(urlRaw) : undefined;
 
   return {
     id,
@@ -155,5 +161,6 @@ export function normalizeUser(raw: any): SorsaUser {
     followersCount: Number.isFinite(followersCount) ? followersCount : 0,
     verified,
     bio,
+    url,
   };
 }

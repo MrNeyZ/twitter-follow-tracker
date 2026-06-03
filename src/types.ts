@@ -9,6 +9,8 @@ export interface SorsaUser {
   followersCount: number;
   verified: boolean;
   bio: string;
+  /** Profile website/url, if the provider returns one. */
+  url?: string;
 }
 
 /** An influencer we watch, loaded from config. */
@@ -27,6 +29,7 @@ export interface NewFollow {
   influencerId: string;
   followed: SorsaUser;
   score: ScoreResult;
+  classification: ProjectClassification;
 }
 
 /** Output of the placeholder scoring step. */
@@ -35,6 +38,18 @@ export interface ScoreResult {
   verified: boolean;
   followersCount: number;
   matchedKeywords: string[];
+}
+
+/**
+ * Project-vs-person classification of a newly-followed account.
+ * Drives the alert decision (see scoring.ts for thresholds).
+ */
+export interface ProjectClassification {
+  /** 0-100. Higher = more likely a project/protocol account. */
+  projectScore: number;
+  category: 'project' | 'personal' | 'unknown';
+  /** Human-readable signals that contributed to the score. */
+  reasons: string[];
 }
 
 export interface AppConfig {

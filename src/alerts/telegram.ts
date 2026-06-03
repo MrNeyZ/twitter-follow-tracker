@@ -37,17 +37,25 @@ function formatMessage(ev: NewFollow): string {
     ? ev.score.matchedKeywords.join(', ')
     : '—';
   const verified = f.verified ? '✅' : '—';
+  const c = ev.classification;
+  const highSignal = c.projectScore >= 85;
+  const header = highSignal ? `🚨 <b>HIGH SIGNAL — New follow</b>` : `🔔 <b>New follow</b>`;
+  const reasons = c.reasons.length ? c.reasons.join('\n   • ') : '—';
   const lines: (string | null)[] = [
-    `🔔 <b>New follow</b>`,
+    header,
     ``,
     `<b>${escapeHtml(inf)}</b> (@${escapeHtml(ev.influencer.username)}) just followed:`,
     `➡️ <b>@${escapeHtml(f.username)}</b>`,
     f.displayName ? `   ${escapeHtml(f.displayName)}` : null,
     ``,
+    `🧭 Category: <b>${escapeHtml(c.category)}</b>`,
+    `📊 Project score: <b>${c.projectScore}</b>/100`,
+    `🧩 Reasons:\n   • ${escapeHtml(reasons)}`,
+    ``,
     `👥 Followers: ${f.followersCount.toLocaleString('en-US')}`,
     `🔵 Verified: ${verified}`,
     `🏷️ Keywords: ${escapeHtml(kw)}`,
-    `⭐ Score: ${ev.score.score}`,
+    `⭐ Relevance: ${ev.score.score}`,
     ``,
     `https://x.com/${encodeURIComponent(f.username)}`,
   ];

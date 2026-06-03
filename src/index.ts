@@ -3,7 +3,12 @@ import { Db } from './db';
 import { SorsaProvider } from './providers/sorsa';
 import { TelegramAlerter } from './alerts/telegram';
 import { DiscordAlerter } from './alerts/discord';
-import { scoreUser } from './scoring';
+import {
+  scoreUser,
+  classifyAccount,
+  PROJECT_ALERT_THRESHOLD,
+  PROJECT_HIGH_SIGNAL_THRESHOLD,
+} from './scoring';
 import { AppConfig, WatchedInfluencer, SorsaUser, NewFollow } from './types';
 
 function log(...args: unknown[]): void {
@@ -66,13 +71,19 @@ async function processInfluencer(
   db.addToFollowingSnapshot(influencerId, newlyFollowed, isoTime);
   db.markChecked(influencerId, isoTime);
 
-  // 5 + 6. Record + score each new follow, dedupe via follow_events, then alert.
+  // 5 + 6. Record + score + classify each new follow, dedupe via follow_events,
+  // then alert only if it looks like a project (projectScore >= threshold).
   for (const followed of newlyFollowed) {
     try {
       const score = scoreUser(followed);
+      const corroboration = db.countInfluencersFollowing(followed.id);
+      const classification = classifyAccount(followed, {
+        corroborationCount: corroboration,
+      });
 
       // insertFollowEvent returns false if the (influencer, followed) pair
-      // already exists -> prevents duplicate alerts.
+      // already exists -> prevents duplicate alerts. The event is saved
+      // regardless of score; only the *alert* is gated below.
       const isNew = db.insertFollowEvent(influencerId, followed, score, isoTime);
       if (!isNew) {
         continue;
@@ -83,13 +94,25 @@ async function processInfluencer(
         influencerId,
         followed,
         score,
+        classification,
       };
 
+      // Alert rule: below the threshold we keep the event but stay quiet.
+      if (classification.projectScore < PROJECT_ALERT_THRESHOLD) {
+        log(
+          `  ${label}: saved (no alert) @${followed.username} ` +
+            `[${classification.category}, projectScore=${classification.projectScore}]`
+        );
+        continue;
+      }
+
+      const highSignal = classification.projectScore >= PROJECT_HIGH_SIGNAL_THRESHOLD;
       await dispatchAlerts(event, telegram, discord);
       db.markEventAlerted(influencerId, followed.id);
       log(
-        `  ${label}: alerted new follow @${followed.username} ` +
-          `(score=${score.score}, verified=${score.verified}, kw=[${score.matchedKeywords.join(',')}])`
+        `  ${label}: alerted${highSignal ? ' [HIGH SIGNAL]' : ''} @${followed.username} ` +
+          `[${classification.category}, projectScore=${classification.projectScore}, ` +
+          `score=${score.score}, verified=${score.verified}]`
       );
     } catch (err) {
       // Don't let one bad follow event abort the rest of the influencer's batch.

@@ -79,6 +79,10 @@ export function loadConfig(): AppConfig {
     telegramBotToken: requireEnv('TELEGRAM_BOT_TOKEN'),
     telegramChatId: requireEnv('TELEGRAM_CHAT_ID'),
     discordWebhookUrl: requireEnv('DISCORD_WEBHOOK_URL'),
+    // Per-channel alert toggles. Telegram defaults OFF, Discord defaults ON, so
+    // a Discord-only setup never trips on placeholder Telegram credentials.
+    alertTelegramEnabled: optionalEnv('ALERT_TELEGRAM_ENABLED', 'false').toLowerCase() === 'true',
+    alertDiscordEnabled: optionalEnv('ALERT_DISCORD_ENABLED', 'true').toLowerCase() === 'true',
     pollIntervalMinutes,
     runOnce: optionalEnv('RUN_ONCE', 'false').toLowerCase() === 'true',
     dbPath: optionalEnv('DB_PATH', './data/tracker.db'),

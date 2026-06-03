@@ -101,12 +101,23 @@ Only the selected provider's API key is required.
 | `TWITTERAPI_IO_BASE_URL` | no       | Defaults to `https://api.twitterapi.io`.                          |
 | `SORSA_API_KEY`          | if sorsa | Sorsa API key (sent as the `ApiKey` header).                      |
 | `SORSA_BASE_URL`         | no       | Defaults to `https://api.sorsa.io/v3`.                            |
-| `TELEGRAM_BOT_TOKEN`     | yes      | Bot token from @BotFather.                                         |
-| `TELEGRAM_CHAT_ID`       | yes      | Target chat/channel id.                                            |
-| `DISCORD_WEBHOOK_URL`    | yes      | Discord channel incoming-webhook URL.                             |
+| `ALERT_TELEGRAM_ENABLED` | no       | Send Telegram alerts (default `false`). When off, Telegram is never called. |
+| `ALERT_DISCORD_ENABLED`  | no       | Send Discord alerts (default `true`). When off, Discord is never called. |
+| `TELEGRAM_BOT_TOKEN`     | if telegram enabled | Bot token from @BotFather.                             |
+| `TELEGRAM_CHAT_ID`       | if telegram enabled | Target chat/channel id.                                |
+| `DISCORD_WEBHOOK_URL`    | if discord enabled  | Discord channel incoming-webhook URL.                  |
 | `POLL_INTERVAL_MINUTES`  | no       | Scheduler tick in minutes (default `15`). See [Tiered Polling](#tiered-polling) — accounts are polled per-tier, not every tick. |
 | `RUN_ONCE`               | no       | `true` runs a single cycle then exits (default `false`).          |
 | `DB_PATH`                | no       | SQLite file path (default `./data/tracker.db`).                   |
+
+### Alert channels
+
+Telegram and Discord are toggled independently via `ALERT_TELEGRAM_ENABLED` /
+`ALERT_DISCORD_ENABLED`. A **disabled channel is never called**, so its
+credentials can stay as placeholders. Enabled channels are dispatched
+concurrently and a failure in one never blocks the other. The default
+(**Telegram off, Discord on**) is a Discord-only setup that won't trip on
+missing Telegram credentials.
 
 ### Configure the influencer list
 

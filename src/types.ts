@@ -85,6 +85,9 @@ export interface AppConfig {
   telegramBotToken: string;
   telegramChatId: string;
   discordWebhookUrl: string;
+  /** Per-channel alert toggles (Telegram defaults off, Discord defaults on). */
+  alertTelegramEnabled: boolean;
+  alertDiscordEnabled: boolean;
   pollIntervalMinutes: number;
   runOnce: boolean;
   dbPath: string;

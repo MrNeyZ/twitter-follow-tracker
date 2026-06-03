@@ -127,7 +127,7 @@ async function processInfluencer(
       }
 
       const highSignal = classification.projectScore >= PROJECT_HIGH_SIGNAL_THRESHOLD;
-      await dispatchAlerts(event, telegram, discord);
+      await dispatchAlerts(event, telegram, discord, cfg);
       db.markEventAlerted(influencerId, followed.id);
       log(
         `  ${label}: alerted${highSignal ? ' [HIGH SIGNAL]' : ''} @${followed.username} ` +
@@ -144,17 +144,21 @@ async function processInfluencer(
 async function dispatchAlerts(
   event: NewFollow,
   telegram: TelegramAlerter,
-  discord: DiscordAlerter
+  discord: DiscordAlerter,
+  cfg: AppConfig
 ): Promise<void> {
-  // Send to both channels; a failure in one shouldn't block the other.
-  const results = await Promise.allSettled([
-    telegram.sendNewFollow(event),
-    discord.sendNewFollow(event),
-  ]);
-  const labels = ['telegram', 'discord'];
+  // Only dispatch to enabled channels; a disabled channel is never called (so
+  // placeholder creds can't fail). Enabled channels still run concurrently and
+  // a failure in one doesn't block the other (Promise.allSettled).
+  const channels: { label: string; send: Promise<void> }[] = [];
+  if (cfg.alertTelegramEnabled) channels.push({ label: 'telegram', send: telegram.sendNewFollow(event) });
+  if (cfg.alertDiscordEnabled) channels.push({ label: 'discord', send: discord.sendNewFollow(event) });
+  if (channels.length === 0) return;
+
+  const results = await Promise.allSettled(channels.map((c) => c.send));
   results.forEach((r, i) => {
     if (r.status === 'rejected') {
-      errLog(`    alert via ${labels[i]} failed:`, asMessage(r.reason));
+      errLog(`    alert via ${channels[i].label} failed:`, asMessage(r.reason));
     }
   });
 }
@@ -225,6 +229,10 @@ async function main(): Promise<void> {
   for (const line of formatCostEstimate(estimateCost(cfg.influencers))) log(line);
   const telegram = new TelegramAlerter(cfg.telegramBotToken, cfg.telegramChatId);
   const discord = new DiscordAlerter(cfg.discordWebhookUrl);
+  log(
+    `Alerts: telegram=${cfg.alertTelegramEnabled ? 'on' : 'off'}, ` +
+      `discord=${cfg.alertDiscordEnabled ? 'on' : 'off'}`
+  );
 
   let shuttingDown = false;
   const shutdown = (signal: string) => {

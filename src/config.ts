@@ -48,6 +48,13 @@ export function loadConfig(): AppConfig {
     throw new Error(`TWITTER_PROVIDER must be "twitterapiio" or "sorsa" (got "${provider}")`);
   }
 
+  // Cost control: followings page size per request (first page only). Default
+  // is deliberately small (20) to keep routine polling cheap.
+  const twitterApiPageSize = Number(optionalEnv('TWITTERAPI_PAGE_SIZE', '20'));
+  if (!Number.isInteger(twitterApiPageSize) || twitterApiPageSize <= 0) {
+    throw new Error('TWITTERAPI_PAGE_SIZE must be a positive integer');
+  }
+
   // Only the selected provider's API key is required; the other stays optional
   // so a twitterapi.io-only setup doesn't need a Sorsa key (and vice versa).
   return {
@@ -60,6 +67,7 @@ export function loadConfig(): AppConfig {
         ? requireEnv('TWITTERAPI_IO_KEY')
         : optionalEnv('TWITTERAPI_IO_KEY', ''),
     twitterApiIoBaseUrl: optionalEnv('TWITTERAPI_IO_BASE_URL', 'https://api.twitterapi.io'),
+    twitterApiPageSize,
     telegramBotToken: requireEnv('TELEGRAM_BOT_TOKEN'),
     telegramChatId: requireEnv('TELEGRAM_CHAT_ID'),
     discordWebhookUrl: requireEnv('DISCORD_WEBHOOK_URL'),

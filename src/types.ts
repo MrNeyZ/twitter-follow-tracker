@@ -70,6 +70,7 @@ export interface AppConfig {
   sorsaBaseUrl: string;
   twitterApiIoKey: string;
   twitterApiIoBaseUrl: string;
+  twitterApiPageSize: number;
   telegramBotToken: string;
   telegramChatId: string;
   discordWebhookUrl: string;

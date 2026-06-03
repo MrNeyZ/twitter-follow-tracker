@@ -17,7 +17,11 @@ function createProvider(cfg: AppConfig): FollowProvider {
   if (cfg.provider === 'sorsa') {
     return new SorsaProvider(cfg.sorsaApiKey, cfg.sorsaBaseUrl);
   }
-  return new TwitterApiIoProvider(cfg.twitterApiIoKey, cfg.twitterApiIoBaseUrl);
+  return new TwitterApiIoProvider(
+    cfg.twitterApiIoKey,
+    cfg.twitterApiIoBaseUrl,
+    cfg.twitterApiPageSize
+  );
 }
 
 function log(...args: unknown[]): void {

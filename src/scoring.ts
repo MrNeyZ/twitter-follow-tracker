@@ -169,6 +169,14 @@ export function classifyAccount(
     reasons.push('no bio and no website (-18)');
   }
 
+  // Unproven placeholder: tiny following AND no web presence. On its own this
+  // shouldn't clear the alert bar on keywords alone — it needs corroboration
+  // (multiple watched influencers) to surface.
+  if (user.followersCount < 1_000 && !website) {
+    score -= 15;
+    reasons.push('very low followers and no website (-15)');
+  }
+
   // Only penalise a human-name pattern when nothing else looks project-y,
   // so "Magic Eden"-style names with project bios aren't punished.
   const humanName = projectKw.length === 0 && looksLikeHumanName(user.displayName);

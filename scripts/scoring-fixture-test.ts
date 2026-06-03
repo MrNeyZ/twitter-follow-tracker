@@ -30,6 +30,8 @@ interface Fixture {
   url: string;
   followersCount: number;
   verified: boolean;
+  /** Optional: how many watched influencers follow this account (corroboration). */
+  corroborationCount?: number;
   expectedCategory: 'project' | 'personal' | 'unknown';
   shouldAlert: boolean;
   shouldHighSignal: boolean;
@@ -65,16 +67,19 @@ function main(): void {
 
   console.log(
     pad('fixture', 30),
+    pad('corr', 5),
     pad('score', 6),
     pad('category', 18),
     pad('alert', 14),
     pad('high', 14),
     'result'
   );
-  console.log('-'.repeat(100));
+  console.log('-'.repeat(105));
 
   for (const f of fixtures) {
-    const c = classifyAccount(toUser(f));
+    const c = classifyAccount(toUser(f), {
+      corroborationCount: f.corroborationCount,
+    });
     const alert = c.projectScore >= PROJECT_ALERT_THRESHOLD;
     const high = c.projectScore >= PROJECT_HIGH_SIGNAL_THRESHOLD;
 
@@ -89,6 +94,7 @@ function main(): void {
 
     console.log(
       pad(f.name, 30),
+      pad(String(f.corroborationCount ?? 0), 5),
       pad(String(c.projectScore), 6),
       pad(mark(c.category, f.expectedCategory, catOk), 18),
       pad(mark(String(alert), String(f.shouldAlert), alertOk), 14),

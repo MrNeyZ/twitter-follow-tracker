@@ -353,5 +353,70 @@
     "expectedCategory": "project",
     "shouldAlert": true,
     "shouldHighSignal": false
+  },
+  {
+    "name": "ca-launchpad-pump",
+    "note": "CA label + pump.fun launchpad address (+30) and follower band (+12) -> 92 high signal",
+    "username": "freshmint",
+    "displayName": "freshmint",
+    "bio": "CA: HgBRWfYxEfvPhtqkaeymCQtHCrKE46qQ43pKe8HCpump",
+    "url": "",
+    "followersCount": 50000,
+    "verified": false,
+    "expectedCategory": "project",
+    "shouldAlert": true,
+    "shouldHighSignal": true
+  },
+  {
+    "name": "ca-launchpad-bonk",
+    "note": "ca label + bonk launchpad address (+30), no other signals -> 80 project alert (not high)",
+    "username": "barker",
+    "displayName": "barker",
+    "bio": "ca CDBdbNqmrLu1PcgjrFG52yxg71QnFhBZcUE6PSFdbonk",
+    "url": "",
+    "followersCount": 300000,
+    "verified": false,
+    "expectedCategory": "project",
+    "shouldAlert": true,
+    "shouldHighSignal": false
+  },
+  {
+    "name": "ticker-bonk-only",
+    "note": "Bare $BONK ticker is too short for a base58 address -> NO contract signal -> stays 62 unknown",
+    "username": "bonkfan",
+    "displayName": "bonkfan",
+    "bio": "$BONK to the moon",
+    "url": "",
+    "followersCount": 5000,
+    "verified": false,
+    "expectedCategory": "unknown",
+    "shouldAlert": false,
+    "shouldHighSignal": false
+  },
+  {
+    "name": "personal-ca-normal-text",
+    "note": "Personal account that says 'ca' (California) as normal text, no address -> NO contract signal -> 24 personal",
+    "username": "macromike",
+    "displayName": "macromike",
+    "bio": "trader. opinions are my own. based in ca.",
+    "url": "",
+    "followersCount": 300000,
+    "verified": false,
+    "expectedCategory": "personal",
+    "shouldAlert": false,
+    "shouldHighSignal": false
+  },
+  {
+    "name": "raw-solana-address-no-label",
+    "note": "Raw 44-char base58 address, no CA label, no launchpad suffix -> contract signal (+25) -> 75 project alert",
+    "username": "stealthdrop",
+    "displayName": "stealthdrop",
+    "bio": "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU",
+    "url": "",
+    "followersCount": 300000,
+    "verified": false,
+    "expectedCategory": "project",
+    "shouldAlert": true,
+    "shouldHighSignal": false
   }
 ]

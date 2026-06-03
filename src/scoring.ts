@@ -106,6 +106,27 @@ function hasWebsite(user: SorsaUser): boolean {
   return /\bhttps?:\/\//i.test(user.bio);
 }
 
+// Base58 alphabet (Bitcoin/Solana) — excludes 0, O, I, l. A Solana token mint
+// address is a 32-44 char base58 string. We tokenize on non-base58 characters,
+// so short tickers like "$BONK"/"$WIF" and ordinary words (and the bare label
+// "ca") never reach the 32-char minimum and can't match.
+const SOL_ADDRESS_RE = /[1-9A-HJ-NP-Za-km-z]{32,44}/g;
+
+/**
+ * Detect a Solana token contract address in the account's text fields.
+ * Returns 'launchpad' if any address ends with a launchpad suffix (pump/bonk),
+ * 'ca' for a plain contract address, or null if none is present. The label
+ * "CA:"/"ca" is not required — a raw address-looking string is enough — and the
+ * label alone (without an address) never triggers.
+ */
+function detectContractAddress(user: SorsaUser): 'launchpad' | 'ca' | null {
+  const text = `${user.username} ${user.displayName ?? ''} ${user.bio} ${user.url ?? ''}`;
+  const tokens = text.match(SOL_ADDRESS_RE);
+  if (!tokens) return null;
+  if (tokens.some((t) => /(?:pump|bonk)$/.test(t))) return 'launchpad';
+  return 'ca';
+}
+
 /** Rough "Firstname Lastname" detector for the human-name negative signal. */
 function looksLikeHumanName(displayName?: string): boolean {
   if (!displayName) return false;
@@ -148,6 +169,17 @@ export function classifyAccount(
   if (corroboration >= 2) {
     score += 20;
     reasons.push(`followed by ${corroboration} watched influencers (+20)`);
+  }
+
+  // Token contract address is a strong project signal; a launchpad-suffixed
+  // address (pump.fun / bonk) is stronger still.
+  const contract = detectContractAddress(user);
+  if (contract === 'launchpad') {
+    score += 30;
+    reasons.push('launchpad token address in bio (+30)');
+  } else if (contract === 'ca') {
+    score += 25;
+    reasons.push('contract address in bio (+25)');
   }
 
   // --- negative signals ---

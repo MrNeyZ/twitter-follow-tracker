@@ -49,8 +49,8 @@ export function loadConfig(): AppConfig {
   }
 
   // Cost control: followings page size per request (first page only). Default
-  // is deliberately small (20) to keep routine polling cheap.
-  const twitterApiPageSize = Number(optionalEnv('TWITTERAPI_PAGE_SIZE', '20'));
+  // is deliberately small (5) to keep routine polling cheap.
+  const twitterApiPageSize = Number(optionalEnv('TWITTERAPI_PAGE_SIZE', '5'));
   if (!Number.isInteger(twitterApiPageSize) || twitterApiPageSize <= 0) {
     throw new Error('TWITTERAPI_PAGE_SIZE must be a positive integer');
   }

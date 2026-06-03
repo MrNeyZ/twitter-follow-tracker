@@ -6,17 +6,22 @@ dotenv.config();
 /**
  * Watched influencer list.
  *
- * PLACEHOLDER — the real list will be provided later. Add one entry per
- * influencer. `username` is required; `userId` is optional and skips the
- * username -> id resolution step when present.
+ * `username` is required; `userId` is optional and skips the username -> id
+ * resolution step when present (none resolved yet — username-only for now).
  *
  * Example:
  *   { username: 'VitalikButerin', label: 'Vitalik' },
  *   { username: 'cobie', userId: '123456789' },
  */
 export const WATCHED_INFLUENCERS: WatchedInfluencer[] = [
-  // { username: 'placeholder_handle_1', label: 'Placeholder 1' },
-  // { username: 'placeholder_handle_2', label: 'Placeholder 2' },
+  { username: '0xuberM', label: 'crypto-watch' },
+  { username: 'f1racecar1', label: 'crypto-watch' },
+  { username: 'reznio_o', label: 'crypto-watch' },
+  { username: 'diamondARS_', label: 'crypto-watch' },
+  { username: 'gr3gor14n', label: 'crypto-watch' },
+  { username: 'airtightfish', label: 'crypto-watch' },
+  { username: 'astaso1', label: 'crypto-watch' },
+  { username: 'VictoryHell_', label: 'self-test' },
 ];
 
 function requireEnv(name: string): string {

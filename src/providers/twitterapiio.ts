@@ -99,6 +99,12 @@ export function normalizeUser(raw: any): SorsaUser {
   const verified = Boolean(raw?.verified ?? raw?.is_blue_verified ?? false);
   const bio = String(raw?.description ?? raw?.bio ?? '');
   const url = raw?.url ? String(raw.url) : undefined;
+  const profileImageUrl = upscalePfp(
+    raw?.profile_image_url_https ?? raw?.profilePicture ?? raw?.profileImageUrl
+  );
+  const bannerUrl = normalizeStr(
+    raw?.profile_banner_url ?? raw?.coverPicture ?? raw?.profileBannerUrl
+  );
 
   return {
     id,
@@ -108,5 +114,23 @@ export function normalizeUser(raw: any): SorsaUser {
     verified,
     bio,
     url,
+    profileImageUrl,
+    bannerUrl,
   };
+}
+
+function normalizeStr(v: unknown): string | undefined {
+  if (v === undefined || v === null) return undefined;
+  const s = String(v).trim();
+  return s === '' ? undefined : s;
+}
+
+/**
+ * Twitter profile-image URLs come back at the small "_normal" size (48px). Bump
+ * them to "_400x400" for a crisp avatar in the alert card. Other URLs pass through.
+ */
+function upscalePfp(v: unknown): string | undefined {
+  const s = normalizeStr(v);
+  if (!s) return undefined;
+  return s.replace(/_normal(\.[a-z]+)(?:\?.*)?$/i, '_400x400$1');
 }

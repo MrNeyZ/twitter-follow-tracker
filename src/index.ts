@@ -8,7 +8,6 @@ import {
   scoreUser,
   classifyAccount,
   PROJECT_ALERT_THRESHOLD,
-  PROJECT_HIGH_SIGNAL_THRESHOLD,
 } from './scoring';
 import { AppConfig, WatchedInfluencer, SorsaUser, NewFollow, FollowProvider } from './types';
 import {
@@ -18,6 +17,12 @@ import {
   estimateCost,
   formatCostEstimate,
 } from './polling';
+import {
+  loadInfluencerImages,
+  getInfluencerImageUrl,
+  INFLUENCER_IMAGES_FILENAME,
+} from './influencer-images';
+import * as path from 'path';
 
 /** Build the follow-data provider selected by config (TWITTER_PROVIDER). */
 function createProvider(cfg: AppConfig): FollowProvider {
@@ -53,10 +58,16 @@ async function processInfluencer(
   const label = inf.label ?? inf.username;
 
   // 1. Resolve username -> provider user id if not already provided.
+  // Best-effort influencer avatar for the alert banner's left side. Precedence:
+  // config imageUrl -> startup-loaded image cache (data/influencer-images.json)
+  // -> pfp from the username resolution (Sorsa only). We never make an EXTRA
+  // call just for the avatar inside the polling loop.
   let influencerId = inf.userId;
+  let influencerImageUrl = inf.imageUrl ?? getInfluencerImageUrl(inf.username);
   if (!influencerId) {
     const resolved = await provider.getUserByUsername(inf.username);
     influencerId = resolved.id;
+    influencerImageUrl = influencerImageUrl ?? resolved.profileImageUrl;
     if (!influencerId) {
       throw new Error(`Could not resolve user id for @${inf.username}`);
     }
@@ -115,6 +126,8 @@ async function processInfluencer(
         followed,
         score,
         classification,
+        detectedAt: isoTime,
+        influencerImageUrl,
       };
 
       // Alert rule: below the threshold we keep the event but stay quiet.
@@ -126,11 +139,12 @@ async function processInfluencer(
         continue;
       }
 
-      const highSignal = classification.projectScore >= PROJECT_HIGH_SIGNAL_THRESHOLD;
+      // HIGH PRIORITY is driven by a contract-address signal, not projectScore.
+      const highPriority = classification.highPriority;
       await dispatchAlerts(event, telegram, discord, cfg);
       db.markEventAlerted(influencerId, followed.id);
       log(
-        `  ${label}: alerted${highSignal ? ' [HIGH SIGNAL]' : ''} @${followed.username} ` +
+        `  ${label}: alerted${highPriority ? ' [HIGH PRIORITY]' : ''} @${followed.username} ` +
           `[${classification.category}, projectScore=${classification.projectScore}, ` +
           `score=${score.score}, verified=${score.verified}] ` +
           `reasons=[${classification.reasons.join('; ')}]`
@@ -227,6 +241,10 @@ async function main(): Promise<void> {
   const db = new Db(cfg.dbPath);
   const provider = createProvider(cfg);
   log(`Provider: ${cfg.provider}`);
+  // Load the influencer image cache once at startup (no per-cycle fetches).
+  const imagesPath = path.join(path.dirname(cfg.dbPath), INFLUENCER_IMAGES_FILENAME);
+  const cachedImages = loadInfluencerImages(imagesPath);
+  log(`Influencer image cache: ${cachedImages} cached avatar(s) from ${imagesPath}`);
   for (const line of formatCostEstimate(estimateCost(cfg.influencers))) log(line);
   const telegram = new TelegramAlerter(cfg.telegramBotToken, cfg.telegramChatId);
   const discord = new DiscordAlerter(cfg.discordWebhookUrl);

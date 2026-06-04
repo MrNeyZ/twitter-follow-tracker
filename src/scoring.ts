@@ -119,12 +119,24 @@ const SOL_ADDRESS_RE = /[1-9A-HJ-NP-Za-km-z]{32,44}/g;
  * "CA:"/"ca" is not required — a raw address-looking string is enough — and the
  * label alone (without an address) never triggers.
  */
-function detectContractAddress(user: SorsaUser): 'launchpad' | 'ca' | null {
+export function detectContractAddress(user: SorsaUser): 'launchpad' | 'ca' | null {
   const text = `${user.username} ${user.displayName ?? ''} ${user.bio} ${user.url ?? ''}`;
   const tokens = text.match(SOL_ADDRESS_RE);
   if (!tokens) return null;
   if (tokens.some((t) => /(?:pump|bonk)$/.test(t))) return 'launchpad';
   return 'ca';
+}
+
+/**
+ * HIGH PRIORITY = a Solana contract address (plain or launchpad-suffixed) is
+ * present in the account's text. This is deliberately decoupled from
+ * projectScore: a high score alone (keywords, website, corroboration) does NOT
+ * make an alert high priority — only a real CA / launchpad token address does.
+ * Short tickers like "$BONK" and the bare label "ca" never qualify (see
+ * detectContractAddress).
+ */
+export function isHighPriority(user: SorsaUser): boolean {
+  return detectContractAddress(user) !== null;
 }
 
 /** Rough "Firstname Lastname" detector for the human-name negative signal. */
@@ -172,7 +184,8 @@ export function classifyAccount(
   }
 
   // Token contract address is a strong project signal; a launchpad-suffixed
-  // address (pump.fun / bonk) is stronger still.
+  // address (pump.fun / bonk) is stronger still. The same signal also drives
+  // the HIGH PRIORITY label (see highPriority in the return value).
   const contract = detectContractAddress(user);
   if (contract === 'launchpad') {
     score += 30;
@@ -231,5 +244,11 @@ export function classifyAccount(
 
   if (reasons.length === 0) reasons.push('no strong signals');
 
-  return { projectScore, category, reasons };
+  return {
+    projectScore,
+    category,
+    reasons,
+    caSignal: contract,
+    highPriority: contract !== null,
+  };
 }

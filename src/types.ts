@@ -11,6 +11,10 @@ export interface SorsaUser {
   bio: string;
   /** Profile website/url, if the provider returns one. */
   url?: string;
+  /** Profile picture URL, if the provider returns one (used in alert cards). */
+  profileImageUrl?: string;
+  /** Profile banner/header image URL, if available (large image in cards). */
+  bannerUrl?: string;
 }
 
 /**
@@ -42,6 +46,12 @@ export interface WatchedInfluencer {
   tier?: InfluencerTier;
   /** Explicit per-account poll interval in minutes; overrides the tier default. */
   pollIntervalMinutes?: number;
+  /**
+   * Optional profile-picture URL for this influencer, used as the author icon
+   * in alert cards. Best-effort: the polling path does not fetch it (would cost
+   * an extra API call), so set it here if you want the follower's avatar shown.
+   */
+  imageUrl?: string;
 }
 
 /** A detected new-follow event, after scoring. */
@@ -51,6 +61,14 @@ export interface NewFollow {
   followed: SorsaUser;
   score: ScoreResult;
   classification: ProjectClassification;
+  /** ISO timestamp the follow was detected (used for the HH:MM UTC in cards). */
+  detectedAt?: string;
+  /**
+   * Best-effort profile-picture URL for the influencer who followed (author
+   * icon in cards). May be undefined when the polling path doesn't fetch the
+   * influencer's profile — see WatchedInfluencer.imageUrl.
+   */
+  influencerImageUrl?: string;
 }
 
 /** Output of the placeholder scoring step. */
@@ -71,6 +89,18 @@ export interface ProjectClassification {
   category: 'project' | 'personal' | 'unknown';
   /** Human-readable signals that contributed to the score. */
   reasons: string[];
+  /**
+   * Solana contract-address signal found in the account's text fields:
+   *   'launchpad' = address with a pump/bonk launchpad suffix,
+   *   'ca'        = a plain contract address,
+   *   null        = none.
+   */
+  caSignal: 'launchpad' | 'ca' | null;
+  /**
+   * True iff a contract address is present (caSignal !== null). This — NOT the
+   * projectScore — is what drives the HIGH PRIORITY label/colour in alerts.
+   */
+  highPriority: boolean;
 }
 
 export type ProviderName = 'twitterapiio' | 'sorsa';

@@ -13,12 +13,15 @@
     "once": "RUN_ONCE=true ts-node src/index.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test:scoring": "ts-node scripts/scoring-fixture-test.ts",
+    "test:high-priority": "ts-node scripts/high-priority-test.ts",
     "test:polling": "ts-node scripts/polling-test.ts",
+    "cache:influencer-images": "ts-node scripts/cache-influencer-images.ts",
     "test:smoke": "npm run build && node smoke-test.js"
   },
   "dependencies": {
     "better-sqlite3": "^11.3.0",
-    "dotenv": "^16.4.5"
+    "dotenv": "^16.4.5",
+    "sharp": "^0.33.5"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.11",

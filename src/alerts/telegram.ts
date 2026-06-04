@@ -38,8 +38,12 @@ function formatMessage(ev: NewFollow): string {
     : '—';
   const verified = f.verified ? '✅' : '—';
   const c = ev.classification;
-  const highSignal = c.projectScore >= 85;
-  const header = highSignal ? `🚨 <b>HIGH SIGNAL — New follow</b>` : `🔔 <b>New follow</b>`;
+  // HIGH PRIORITY now means "a contract address is in the bio" (c.highPriority),
+  // not a high projectScore. Keep the Telegram label in sync with Discord.
+  const highPriority = c.highPriority;
+  const header = highPriority
+    ? `🚨 <b>HIGH PRIORITY — New follow</b>`
+    : `🔔 <b>New follow</b>`;
   const reasons = c.reasons.length ? c.reasons.join('\n   • ') : '—';
   const lines: (string | null)[] = [
     header,

@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Follow Tracker — Banner Template (1280×900)</title>
+<!--
+  ───────────────────────────────────────────────────────────────────────────
+  FOLLOW TRACKER — server-render banner template
+  This is the ONLY file the bot needs. No React, no build step.
+
+  HOW THE BOT USES IT (Puppeteer / Playwright):
+    const browser = await puppeteer.launch();
+    const page = await browser.newPage();
+    await page.setViewport({ width: 1280, height: 900, deviceScaleFactor: 2 });
+    await page.goto('file://.../banner-template.html');
+    await page.evaluate((data) => window.renderBanner(data), DATA);
+    await page.waitForFunction(() => window.bannerReady === true); // fonts+imgs
+    const el = await page.$('#bn');
+    const png = await el.screenshot({ type: 'png' });   // <-- 1280×900 image
+    await browser.close();
+
+  DATA CONTRACT (window.renderBanner(data)):
+    kind:       "high" | "normal"        // priority → accent color + pill
+    watcher:    string  (no @)           // who followed
+    target:     string  (no @)           // the new follow handle
+    name:       string                   // display name (big title)
+    tag:        string                   // e.g. "Project · Unverified"
+    score:      number  (0–100)
+    relevance:  string|number            // e.g. "4.1"
+    followers:  string|number            // pre-formatted, e.g. "7.2k"
+    flags:      string[]                 // reasons; only the FIRST 3 are shown
+    token:      string | null            // CA / mint, e.g. "HgBR…pump" (optional)
+    time:       string                   // e.g. "1:48 PM"
+    wAva:       string (url|dataURI)     // watcher PFP
+    tAva:       string (url|dataURI)     // new-follow PFP
+
+  LAYOUT RULES (already enforced in CSS — keep them):
+    • Banner is fixed 1280×900. Background is Discord chat grey (#313338) so the
+      image melts into the channel.
+    • flags are capped at 3 (renderBanner slices). The flags area + token row
+      have FIXED heights, so name / score / avatar never move regardless of how
+      many flags or whether a token exists.
+    • Fonts: Space Grotesk (display), Inter (ui), JetBrains Mono (numbers).
+      They load from Google Fonts here; for offline rendering self-host them or
+      the bot must have network access. window.bannerReady waits for fonts.
+  ───────────────────────────────────────────────────────────────────────────
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --dc-chat:   #313338;
+    --dc-darker: #2b2d31;
+    --dc-input:  #383a40;
+    --dc-line:   #3f4147;
+    --dc-text:   #dbdee1;
+    --dc-head:   #f2f3f5;
+    --dc-mut:    #b5bac1;
+    --dc-faint:  #949ba4;
+    --dc-link:   #00a8fc;
+
+    --ui:   'Inter', 'Helvetica Neue', system-ui, sans-serif;
+    --disp: 'Space Grotesk', var(--ui);
+    --mono: 'JetBrains Mono', ui-monospace, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { background: #1a1b1e; display: flex; justify-content: center; padding: 40px; min-width: max-content; }
+
+  .bn {
+    position: relative; width: 1280px; height: 900px; flex: none; overflow: hidden;
+    background: var(--dc-chat);
+    padding: 64px 76px 56px;
+    display: flex; flex-direction: column;
+    font-family: var(--ui); color: var(--dc-text);
+  }
+  .bn.high   { --accent: #ff6b4a; --accent2: #ffa24a; --accent-deep: #e0573f; }
+  .bn.normal { --accent: #43d17f; --accent2: #38c7c0; --accent-deep: #3ba55c; }
+
+  .bn-wash {
+    position: absolute; inset: 0; pointer-events: none;
+    background:
+      linear-gradient(180deg, color-mix(in oklab, var(--accent) 9%, transparent), transparent 20%),
+      radial-gradient(620px 520px at 90% 58%, color-mix(in oklab, var(--accent) 14%, transparent), transparent 68%),
+      radial-gradient(520px 420px at 4% 4%, color-mix(in oklab, var(--accent) 7%, transparent), transparent 70%);
+  }
+  .bn.high .bn-wash {
+    background:
+      linear-gradient(180deg, color-mix(in oklab, var(--accent) 17%, transparent), transparent 24%),
+      radial-gradient(680px 560px at 90% 58%, color-mix(in oklab, var(--accent) 22%, transparent), transparent 66%),
+      radial-gradient(560px 440px at 3% 2%, color-mix(in oklab, var(--accent) 12%, transparent), transparent 68%);
+  }
+
+  .bn-head { position: relative; display: flex; align-items: center; justify-content: space-between; margin-bottom: 40px; }
+  .bn-pill {
+    display: inline-flex; align-items: center; gap: 14px;
+    padding: 16px 26px; border-radius: 16px; line-height: 1;
+    font-weight: 800; font-size: 34px; letter-spacing: .12em;
+    color: #fff; white-space: nowrap;
+    background: linear-gradient(120deg, var(--accent-deep), var(--accent2));
+  }
+  .bn-pill-i { font-size: 26px; }
+  .bn-time { font-family: var(--mono); font-size: 36px; color: #a6acb5; letter-spacing: .04em; white-space: nowrap; }
+
+  .bn-body { position: relative; flex: 1; display: flex; gap: 56px; align-items: flex-start; }
+  .bn-left { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+
+  .bn-route { font-size: 44px; font-weight: 700; letter-spacing: -.01em; margin-bottom: 12px; white-space: nowrap; }
+  .bn-h { color: var(--dc-link); }
+  .bn-to { color: var(--dc-faint); margin: 0 16px; font-weight: 500; }
+
+  .bn-name {
+    font-family: var(--disp); font-weight: 700; font-size: 98px; line-height: .92;
+    letter-spacing: .005em; color: #fff; margin-bottom: 6px;
+  }
+  .bn-tag {
+    font-size: 30px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
+    color: #c6cbd2; margin-bottom: 20px;
+  }
+
+  .bn-stats { display: flex; align-items: center; gap: 32px; margin-bottom: 20px; min-width: 0; }
+  .bn-score { display: flex; align-items: baseline; gap: 8px; flex: none; }
+  .bn-score-n {
+    font-family: var(--disp); font-weight: 700; font-size: 92px; line-height: 1;
+    letter-spacing: -.02em; color: #fff;
+    text-shadow: 0 0 22px color-mix(in oklab, var(--accent) 42%, transparent);
+    padding-right: 2px;
+  }
+  .bn-score-d { font-family: var(--mono); font-size: 38px; color: #9aa0a9; }
+  .bn-divider { width: 2px; height: 86px; background: var(--dc-line); border-radius: 2px; flex: none; }
+  .bn-mini { flex: none; }
+  .bn-mini-k { font-size: 24px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #aab0b9; margin-bottom: 8px; white-space: nowrap; }
+  .bn-mini-v { font-family: var(--mono); font-size: 48px; font-weight: 500; color: var(--dc-head); line-height: 1; white-space: nowrap; }
+
+  /* fixed-height regions → name / score / avatar never move */
+  .bn-flags { display: flex; flex-direction: column; align-items: flex-start; gap: 16px;
+    margin-bottom: 16px; min-height: 234px; }
+  .bn-flag {
+    display: inline-flex; align-items: center; gap: 14px;
+    font-size: 32px; font-weight: 600; color: var(--dc-head);
+    background: rgba(255,255,255,.07);
+    border: 2px solid color-mix(in oklab, var(--accent) 30%, transparent);
+    padding: 12px 24px; border-radius: 999px;
+  }
+  .bn-flag-i { color: var(--accent); font-size: 26px; }
+
+  .bn-token {
+    display: inline-flex; align-items: center; gap: 16px;
+    font-family: var(--mono); font-size: 38px; font-weight: 500; color: var(--dc-link);
+    background: color-mix(in oklab, var(--dc-link) 12%, transparent);
+    border: 2px solid color-mix(in oklab, var(--dc-link) 34%, transparent);
+    padding: 16px 28px; border-radius: 16px; white-space: nowrap;
+  }
+  .bn-token-i { opacity: .65; }
+  .bn-token-row { min-height: 72px; display: flex; align-items: center; }
+
+  .bn-avs { position: relative; flex: 0 0 372px; height: 480px; align-self: center;
+    display: flex; align-items: center; justify-content: center; }
+  .bn-target { position: relative; }
+  .bn-target-glow {
+    position: absolute; inset: -12px; border-radius: 40px; z-index: 0;
+    background: radial-gradient(closest-side, color-mix(in oklab, var(--accent) 34%, transparent), transparent 80%);
+    filter: blur(10px);
+  }
+  .bn-img-t {
+    position: relative; z-index: 1; display: block; width: 356px; height: 356px;
+    object-fit: cover; border-radius: 30px;
+    box-shadow: 0 0 0 4px color-mix(in oklab, var(--accent) 48%, transparent),
+                0 24px 56px rgba(0,0,0,.46);
+  }
+  .bn-target-tag {
+    position: absolute; z-index: 2; left: 50%; bottom: -16px; transform: translateX(-50%);
+    background: linear-gradient(120deg, var(--accent-deep), var(--accent2));
+    color: #fff; font-size: 24px; font-weight: 800; letter-spacing: .14em;
+    padding: 11px 22px; border-radius: 12px; white-space: nowrap;
+    box-shadow: 0 10px 26px rgba(0,0,0,.4);
+  }
+  .bn-watcher { position: absolute; z-index: 3; left: -28px; top: -20px; display: flex; align-items: center; }
+  .bn-img-w {
+    display: block; width: 168px; height: 168px; border-radius: 50%; object-fit: cover;
+    box-shadow: 0 0 0 5px var(--dc-chat), 0 0 0 7px rgba(255,255,255,.14), 0 14px 30px rgba(0,0,0,.5);
+  }
+  .bn-arrow {
+    width: 60px; height: 60px; margin-left: 8px; margin-top: 40px;
+    display: grid; place-items: center; border-radius: 50%;
+    background: var(--dc-input); color: var(--dc-mut); font-size: 30px;
+    box-shadow: 0 0 0 4px var(--dc-chat), 0 8px 20px rgba(0,0,0,.4);
+  }
+</style>
+</head>
+<body>
+  <!-- the bot screenshots THIS element -->
+  <div id="bn"></div>
+
+  <script>
+    // escape helper (handles user-controlled handles / names)
+    function esc(s) {
+      return String(s == null ? '' : s).replace(/[&<>"']/g, c => (
+        { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]
+      ));
+    }
+
+    // Build + inject the banner. Call once per notification.
+    window.renderBanner = function (d) {
+      const kind = d.kind === 'high' ? 'high' : 'normal';
+      const pill = kind === 'high'
+        ? '<span class="bn-pill"><span class="bn-pill-i">◆</span>HIGH PRIORITY</span>'
+        : '<span class="bn-pill"><span class="bn-pill-i">●</span>NEW FOLLOW</span>';
+
+      const flags = (d.flags || []).slice(0, 3).map(f =>
+        `<span class="bn-flag"><span class="bn-flag-i">✦</span>${esc(f)}</span>`
+      ).join('');
+
+      const token = d.token
+        ? `<div class="bn-token"><span class="bn-token-i">⤷</span>${esc(d.token)}</div>`
+        : '';
+
+      document.getElementById('bn').className = 'bn ' + kind;
+      document.getElementById('bn').innerHTML = `
+        <div class="bn-wash"></div>
+        <div class="bn-head">
+          ${pill}
+          <span class="bn-time">${esc(d.time)} UTC</span>
+        </div>
+        <div class="bn-body">
+          <div class="bn-left">
+            <div class="bn-route">
+              <span class="bn-h">@${esc(d.watcher)}</span>
+              <span class="bn-to">→</span>
+              <span class="bn-h">@${esc(d.target)}</span>
+            </div>
+            <div class="bn-name">${esc(d.name)}</div>
+            <div class="bn-tag">${esc(d.tag)}</div>
+            <div class="bn-stats">
+              <div class="bn-score">
+                <span class="bn-score-n">${esc(d.score)}</span>
+                <span class="bn-score-d">/100</span>
+              </div>
+              <div class="bn-divider"></div>
+              <div class="bn-mini">
+                <div class="bn-mini-k">Relevance</div>
+                <div class="bn-mini-v">${esc(d.relevance)}</div>
+              </div>
+              <div class="bn-mini">
+                <div class="bn-mini-k">Followers</div>
+                <div class="bn-mini-v">${esc(d.followers)}</div>
+              </div>
+            </div>
+            <div class="bn-flags">${flags}</div>
+            <div class="bn-token-row">${token}</div>
+          </div>
+          <div class="bn-avs">
+            <div class="bn-target">
+              <div class="bn-target-glow"></div>
+              <img class="bn-img-t" src="${esc(d.tAva)}" alt="" />
+              <div class="bn-target-tag">NEW FOLLOW</div>
+            </div>
+            <div class="bn-watcher">
+              <img class="bn-img-w" src="${esc(d.wAva)}" alt="" />
+            </div>
+          </div>
+        </div>`;
+
+      // signal readiness for the screenshot once fonts + images settle
+      window.bannerReady = false;
+      const imgs = Array.from(document.querySelectorAll('#bn img'));
+      Promise.all([
+        document.fonts ? document.fonts.ready : Promise.resolve(),
+        ...imgs.map(im => im.complete ? Promise.resolve()
+          : new Promise(r => { im.onload = im.onerror = r; }))
+      ]).then(() => { window.bannerReady = true; });
+    };
+
+    // ── sample render so opening the file shows a live preview ──
+    // grey placeholder PFP (replace wAva/tAva with real Twitter image URLs)
+    const PH = 'data:image/svg+xml;utf8,' + encodeURIComponent(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400">
+         <rect width="400" height="400" fill="#4a4d55"/>
+         <text x="200" y="215" font-family="sans-serif" font-size="34"
+               fill="#9aa0a9" text-anchor="middle">PFP</text></svg>`);
+
+    window.renderBanner({
+      kind: 'high',
+      watcher: 'cobratate',
+      target: 'aethermind_ai',
+      name: 'Aethermind',
+      tag: 'Project · Unverified',
+      score: 100,
+      relevance: '9.1',
+      followers: '128k',
+      flags: ['project keywords: solana, ai', 'followers in 1k–250k range', 'launchpad token address in bio'],
+      token: 'HgBR…pump',
+      time: '3:24 AM',
+      wAva: PH,
+      tAva: PH,
+    });
+  </script>
+</body>
+</html>

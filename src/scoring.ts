@@ -128,6 +128,19 @@ export function detectContractAddress(user: SorsaUser): 'launchpad' | 'ca' | nul
 }
 
 /**
+ * Return the actual Solana contract address detected in the account's text
+ * (the launchpad-suffixed token if present, else the first address-looking
+ * token), or null if none. Used to build the Solscan link in alerts; does not
+ * affect scoring. Mirrors detectContractAddress's text composition.
+ */
+export function findContractAddress(user: SorsaUser): string | null {
+  const text = `${user.username} ${user.displayName ?? ''} ${user.bio} ${user.url ?? ''}`;
+  const tokens = text.match(SOL_ADDRESS_RE);
+  if (!tokens) return null;
+  return tokens.find((t) => /(?:pump|bonk)$/.test(t)) ?? tokens[0];
+}
+
+/**
  * HIGH PRIORITY = a Solana contract address (plain or launchpad-suffixed) is
  * present in the account's text. This is deliberately decoupled from
  * projectScore: a high score alone (keywords, website, corroboration) does NOT

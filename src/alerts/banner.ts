@@ -148,7 +148,7 @@ function backgroundSvg(): string {
  * fetch, NOT a generation service); on any failure or missing URL it falls back
  * to a deterministically-coloured placeholder derived from `seed`.
  */
-async function loadAvatar(url: string | undefined, seed: string): Promise<Buffer> {
+export async function loadAvatar(url: string | undefined, seed: string): Promise<Buffer> {
   if (url) {
     try {
       const ctrl = new AbortController();

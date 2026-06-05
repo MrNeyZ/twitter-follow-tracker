@@ -1,42 +1,40 @@
 import { NewFollow } from '../types';
-import { generateFollowBanner } from './banner';
+import { findContractAddress } from '../scoring';
+import { buildCardModel } from './card-model';
+import { renderCard } from './card';
 
-// Card colours (embed bar + banner accent).
-const COLOR_HIGH = 0xe7335a; // hot pink/red — HIGH PRIORITY (contract address present)
-const COLOR_VERIFIED = 0x1d9bf0; // X blue — verified normal follow
-const COLOR_NORMAL = 0x2ecc71; // green — normal follow
+// Embed accent colour (the rendered PNG carries the real styling).
+const COLOR_HIGH = 0xe7335a; // HIGH PRIORITY (contract address present)
+const COLOR_VERIFIED = 0x1d9bf0; // verified normal follow
+const COLOR_NORMAL = 0x2ecc71; // normal follow
 
-/** Filename the generated banner is attached under (referenced by embed.image). */
-const BANNER_FILENAME = 'follow.png';
+/** Filename the generated card is attached under (referenced by embed.image). */
+const CARD_FILENAME = 'card.png';
 
 /** Sends alerts to a Discord channel via an incoming webhook. */
 export class DiscordAlerter {
   constructor(private readonly webhookUrl: string) {}
 
   async sendNewFollow(ev: NewFollow): Promise<void> {
-    // Generate the banner locally; if it fails, still send a banner-less card.
-    let banner: Buffer | null = null;
+    // Render the full card PNG locally; if it fails, still send the (clickable)
+    // wrapper embed without an image.
+    let card: Buffer | null = null;
     try {
-      banner = await generateFollowBanner({
-        influencerImageUrl: ev.influencerImageUrl,
-        followedImageUrl: ev.followed.profileImageUrl,
-        influencerSeed: ev.influencer.username,
-        followedSeed: ev.followed.username,
-      });
+      card = await renderCard(buildCardModel(ev));
     } catch {
-      banner = null;
+      card = null;
     }
 
     const payload = {
       username: 'Follow Tracker',
-      embeds: [buildEmbed(ev, banner !== null)],
+      embeds: [buildEmbed(ev, card !== null)],
     };
 
     let res: Response;
-    if (banner) {
+    if (card) {
       const form = new FormData();
       form.append('payload_json', JSON.stringify(payload));
-      form.append('files[0]', new Blob([banner], { type: 'image/png' }), BANNER_FILENAME);
+      form.append('files[0]', new Blob([card], { type: 'image/png' }), CARD_FILENAME);
       res = await fetch(this.webhookUrl, { method: 'POST', body: form });
     } else {
       res = await fetch(this.webhookUrl, {
@@ -53,78 +51,51 @@ export class DiscordAlerter {
   }
 }
 
-/** Embed bar / banner accent colour for an event. */
+/** Embed bar accent colour for an event. */
 export function cardColor(ev: NewFollow): number {
   if (ev.classification.highPriority) return COLOR_HIGH;
   return ev.followed.verified ? COLOR_VERIFIED : COLOR_NORMAL;
 }
 
 /**
- * Build the minimal Discord embed for a follow event. The generated banner is
- * the primary visual — the embed carries only a few lines of text. Exported so
- * the offline preview / tests can render the payload without the network.
+ * Minimal Discord embed — a thin wrapper around the rendered card PNG. All
+ * information lives in the image; the embed exists only to (a) attach the image
+ * and (b) carry the clickable links Discord can't put on an image:
+ *   - influencer handle  -> x.com profile
+ *   - followed handle    -> x.com profile
+ *   - token short addr   -> Solscan  (high priority only)
  *
- * `withBanner` controls whether embed.image points at the attached banner
- * (false when banner generation failed, so we don't reference a missing file).
+ * `withCard` controls whether embed.image points at the attached card (false
+ * when rendering failed, so we don't reference a missing file).
  */
-export function buildEmbed(ev: NewFollow, withBanner = true): Record<string, unknown> {
-  const f = ev.followed;
-  const c = ev.classification;
-  const high = c.highPriority;
+export function buildEmbed(ev: NewFollow, withCard = true): Record<string, unknown> {
+  const inf = ev.influencer.username;
+  const fol = ev.followed.username;
 
-  const infName = ev.influencer.label ?? ev.influencer.username;
-  const folName = f.displayName ?? f.username;
-  const hhmm = formatHhmmUtc(ev.detectedAt);
-
-  // Sparse, spaced body (no field grid): the event lives in the title; the
-  // description is just the time and two minimal stat lines, separated by blank
-  // lines for whitespace.
-  const event = `${infName} → ${folName}`;
-  const title = `${high ? '🚨 HIGH PRIORITY' : '🔔 NEW FOLLOW'} · ${event}`;
-
-  const stats = high
-    ? [c.caSignal === 'launchpad' ? '🚀 Launchpad CA detected' : '🟢 CA detected', `Score ${c.projectScore}`]
-    : [`Score ${c.projectScore}`, `${compactNumber(f.followersCount)} followers`];
-
-  // Blocks joined with a blank line; lines within a block by a single break.
-  const blocks: string[] = [];
-  if (hhmm) blocks.push(`${hhmm} UTC`);
-  blocks.push(stats.join('\n'));
+  const parts = [`[@${inf}](${profileUrl(inf)}) → [@${fol}](${profileUrl(fol)})`];
+  const token = ev.classification.highPriority ? caLink(ev) : null;
+  if (token) parts.push(token);
 
   const embed: Record<string, unknown> = {
-    title,
-    url: profileUrl(f.username),
-    description: blocks.join('\n\n'),
+    description: parts.join('  ·  '),
     color: cardColor(ev),
-    footer: { text: hhmm ? `Follow Tracker · ${hhmm} UTC` : 'Follow Tracker' },
   };
-
-  if (withBanner) embed.image = { url: `attachment://${BANNER_FILENAME}` };
-
+  if (withCard) embed.image = { url: `attachment://${CARD_FILENAME}` };
   return embed;
+}
+
+/** Clickable short CA → Solscan, or null if no contract address. */
+function caLink(ev: NewFollow): string | null {
+  const addr = findContractAddress(ev.followed);
+  if (!addr) return null;
+  const short = `${addr.slice(0, 4)}…${addr.slice(-4)}`;
+  const url =
+    ev.classification.caSignal === 'launchpad'
+      ? `https://solscan.io/token/${addr}`
+      : `https://solscan.io/account/${addr}`;
+  return `[${short}](${url})`;
 }
 
 function profileUrl(username: string): string {
   return `https://x.com/${encodeURIComponent(username)}`;
-}
-
-/** Extract "HH:MM" in UTC from an ISO timestamp; undefined if missing/invalid. */
-function formatHhmmUtc(iso?: string): string | undefined {
-  if (!iso) return undefined;
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return undefined;
-  const hh = String(d.getUTCHours()).padStart(2, '0');
-  const mm = String(d.getUTCMinutes()).padStart(2, '0');
-  return `${hh}:${mm}`;
-}
-
-/** 5400 -> "5.4k", 95000 -> "95k", 1200000 -> "1.2M". */
-function compactNumber(n: number): string {
-  if (n < 1000) return String(n);
-  if (n < 1_000_000) {
-    const k = n / 1000;
-    return `${k < 10 ? k.toFixed(1).replace(/\.0$/, '') : Math.round(k)}k`;
-  }
-  const m = n / 1_000_000;
-  return `${m < 10 ? m.toFixed(1).replace(/\.0$/, '') : Math.round(m)}M`;
 }

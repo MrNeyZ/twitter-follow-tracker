@@ -14,7 +14,8 @@ dotenv.config();
  *   { username: 'cobie', userId: '123456789' },
  */
 // `tier` controls per-account polling cost (see src/polling.ts):
-//   vip = 10m, normal = 30m, slow = 60m, disabled = never. Missing -> normal.
+//   super_vip = 2m (manual-only), vip = 5m, normal = 15m, slow = 60m,
+//   disabled = never. Missing -> normal.
 export const WATCHED_INFLUENCERS: WatchedInfluencer[] = [
   { username: '0xuberM', label: 'crypto-watch', tier: 'disabled' },
   { username: 'f1racecar1', label: 'crypto-watch', tier: 'normal' },
@@ -42,8 +43,9 @@ function optionalEnv(name: string, fallback: string): string {
 export function loadConfig(): AppConfig {
   // Scheduler tick. Must be <= the smallest tier interval so every tier is
   // polled on time; a larger tick under-polls the tightest tier. Default 1 so
-  // the vip=2m / normal=5m tiers are honored to the minute (worst-case detection
-  // delay == the tier interval). A larger tick rounds detection up to the tick.
+  // the super_vip=2m / vip=5m / normal=15m tiers are honored to the minute
+  // (worst-case detection delay == the tier interval). A larger tick rounds
+  // detection up to the tick.
   const pollIntervalMinutes = Number(optionalEnv('POLL_INTERVAL_MINUTES', '1'));
   if (!Number.isFinite(pollIntervalMinutes) || pollIntervalMinutes <= 0) {
     throw new Error('POLL_INTERVAL_MINUTES must be a positive number');

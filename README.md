@@ -106,7 +106,7 @@ Only the selected provider's API key is required.
 | `TELEGRAM_BOT_TOKEN`     | if telegram enabled | Bot token from @BotFather.                             |
 | `TELEGRAM_CHAT_ID`       | if telegram enabled | Target chat/channel id.                                |
 | `DISCORD_WEBHOOK_URL`    | if discord enabled  | Discord channel incoming-webhook URL.                  |
-| `POLL_INTERVAL_MINUTES`  | no       | Scheduler tick in minutes (default `10`, the smallest tier interval). See [Tiered Polling](#tiered-polling) — accounts are polled per-tier, not every tick. |
+| `POLL_INTERVAL_MINUTES`  | no       | Scheduler tick in minutes (default `1`, ≤ the smallest tier interval). See [Tiered Polling](#tiered-polling) — accounts are polled per-tier, not every tick. |
 | `RUN_ONCE`               | no       | `true` runs a single cycle then exits (default `false`).          |
 | `DB_PATH`                | no       | SQLite file path (default `./data/tracker.db`).                   |
 
@@ -143,31 +143,33 @@ cadence:
   elapsed since `last_checked_at`) — logged as `SKIP_NOT_DUE`.
 - `disabled` accounts are **never** polled — logged as `SKIP_DISABLED`.
 
-| Tier     | Interval |
-| -------- | -------- |
-| vip      | 10 min   |
-| normal   | 30 min   |
-| slow     | 60 min   |
-| disabled | never    |
+| Tier      | Interval |
+| --------- | -------- |
+| super_vip | 2 min (manual-only) |
+| vip       | 5 min    |
+| normal    | 15 min   |
+| slow      | 60 min   |
+| disabled  | never    |
 
 A missing `tier` defaults to `normal`; an optional per-account
 `pollIntervalMinutes` overrides its tier default. Set `POLL_INTERVAL_MINUTES`
-to the smallest tier interval you use (e.g. `10` if you have any `vip`
-accounts) so due accounts are polled close to on time.
+to (or below) the smallest tier interval you use — default `1` so the tightest
+tiers are honored to the minute. `super_vip` is reserved for manual assignment
+to a single hot account.
 
 ```ts
 export const WATCHED_INFLUENCERS: WatchedInfluencer[] = [
-  { username: 'VictoryHell_', label: 'self-test', tier: 'vip' },      // 10 min
+  { username: 'VictoryHell_', label: 'self-test', tier: 'vip' },      // 5 min
   { username: '0xuberM', label: 'crypto-watch', tier: 'disabled' },   // never
-  { username: 'astaso1', label: 'crypto-watch', tier: 'normal' },     // 30 min
+  { username: 'astaso1', label: 'crypto-watch', tier: 'normal' },     // 15 min
 ];
 ```
 
-**Current example configuration:**
+**Current configuration:**
 
-- `VictoryHell_` → **vip** (10 min)
+- `VictoryHell_` → **vip** (5 min)
 - `0xuberM` → **disabled** (never)
-- all others → **normal** (30 min)
+- all others → **normal** (15 min)
 
 ### Cost model
 
@@ -179,28 +181,29 @@ page size:
 - **20–99** returned users = **3 credits/user**.
 - The **cheapest useful poll = 60 credits** (20 users × 3 credits).
 
-Each poll therefore costs **60 credits per account**. Per-account monthly spend
-is modeled as `(1440 / interval_minutes) polls/day × 60 credits × 30 days`.
+A followings fetch still costs **60 credits**, but **count-gated polling** means
+most cycles only pay the cheap **18-credit** profile read (`/twitter/user/info`):
+the 60-credit followings fetch runs only when the account's following count
+changed since last cycle, plus a forced full fetch every
+`TWITTERAPI_FULL_REBASELINE_HOURS` (default 24). (100,000 credits = $1.)
 
-**Example monthly estimate (current configuration):**
+**Example estimate (current config: 1 vip @ 5m, 6 normal @ 15m, 1 disabled):**
 
-| Accounts   | Interval | Polls/day | Credits/day |
-| ---------- | -------- | --------- | ----------- |
-| 1 vip      | 10 min   | 144       | 8,640       |
-| 6 normal   | 30 min   | 48 each   | 17,280      |
-| 1 disabled | never    | 0         | 0           |
-| **Total**  |          |           | **25,920**  |
+| Tier      | Accounts | Interval | Polls/day | Gate (18/poll) |
+| --------- | -------- | -------- | --------- | -------------- |
+| vip       | 1        | 5 min    | 288       | 5,184          |
+| normal    | 6        | 15 min   | 96 each   | 10,368         |
+| disabled  | 1        | never    | 0         | 0              |
+| **Total** |          |          | **864**   | **15,552/day** |
 
-≈ **777,600 credits/month** ≈ **$7.78/month** (100,000 credits = $1).
+- **Gate-only floor:** 864 polls × 18 = **15,552 credits/day ≈ 466,560/month (~$4.67)**.
+- **Plus followings fetches** only when a count moved or the daily rebaseline
+  fires — roughly **+3,000–4,000 credits/day** at modest follow activity.
+- **Expected total ≈ 18,900 credits/day ≈ 567,000/month (~$5.67)**.
 
-**Impact:** before tiered polling, all 8 accounts were polled on every tick. At
-a 10-minute cadence that is 8 × 144 × 60 × 30 ≈ **2,073,600 credits/month
-(~$20.74)**. Tiered polling — disabling one account and running the rest at
-30 min while keeping the `vip` account at 10 min — cuts that to:
-
-≈ **2,073,600 credits/month (~$20.74)**  →  ≈ **777,600 credits/month (~$7.78)**
-
-a ~62% reduction. (The worker logs this estimate at startup.)
+Without the count gate the same 5m/15m cadence would cost 864 × 60 ≈
+**51,840 credits/day (~$15.55/month)** — the gate cuts it ~64%. The worker logs
+the (ungated) tier estimate at startup and the **actual gated spend per cycle**.
 
 ## Run locally
 

@@ -22,10 +22,12 @@ export const GATE_CREDITS = 18;
  * cost only the cheap 18-credit profile read (the 60-credit followings fetch
  * runs only when the count moves). Requires the scheduler tick
  * (POLL_INTERVAL_MINUTES) to be <= the smallest interval here.
+ *   super_vip = manual-only hot tier (assign by hand for a single hot account).
  */
 export const TIER_INTERVAL_MINUTES: Record<Exclude<InfluencerTier, 'disabled'>, number> = {
-  vip: 2,
-  normal: 5,
+  super_vip: 2,
+  vip: 5,
+  normal: 15,
   slow: 60,
 };
 
@@ -84,7 +86,7 @@ export interface CostEstimate {
  * honored in the totals (and folded into their tier's creditsPerDay).
  */
 export function estimateCost(influencers: WatchedInfluencer[]): CostEstimate {
-  const order: InfluencerTier[] = ['vip', 'normal', 'slow', 'disabled'];
+  const order: InfluencerTier[] = ['super_vip', 'vip', 'normal', 'slow', 'disabled'];
   const perTier: TierCost[] = order.map((tier) => {
     const members = influencers.filter((i) => effectiveTier(i) === tier);
     let creditsPerDay = 0;
@@ -113,7 +115,7 @@ export function formatCostEstimate(est: CostEstimate): string[] {
   for (const t of est.perTier) {
     const every = t.intervalMinutes === null ? 'never' : `every ${t.intervalMinutes}m`;
     lines.push(
-      `  ${t.tier.padEnd(8)} x${t.count} (${every}): ` +
+      `  ${t.tier.padEnd(9)} x${t.count} (${every}): ` +
         `${Math.round(t.creditsPerDay)} credits/day`
     );
   }

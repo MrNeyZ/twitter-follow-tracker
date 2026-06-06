@@ -37,6 +37,11 @@ assert(effectiveTier({ username: 'a' }) === 'normal', 'missing tier defaults to 
 assert(effectiveTier({ username: 'a', tier: 'vip' }) === 'vip', 'explicit tier is respected');
 
 // --- effective interval ---
+assert(
+  effectiveIntervalMinutes({ username: 'a', tier: 'super_vip' }) === TIER_INTERVAL_MINUTES.super_vip,
+  'super_vip -> tier default'
+);
+assert(TIER_INTERVAL_MINUTES.super_vip === 2, 'super_vip interval is 2m');
 assert(effectiveIntervalMinutes({ username: 'a', tier: 'vip' }) === TIER_INTERVAL_MINUTES.vip, 'vip -> tier default');
 assert(effectiveIntervalMinutes({ username: 'a' }) === TIER_INTERVAL_MINUTES.normal, 'normal -> tier default');
 assert(effectiveIntervalMinutes({ username: 'a', tier: 'slow' }) === TIER_INTERVAL_MINUTES.slow, 'slow -> 60m');

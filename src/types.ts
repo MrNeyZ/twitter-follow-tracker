@@ -36,11 +36,12 @@ export interface FollowProvider {
 }
 
 /**
- * Polling tier for a watched account (cost control).
- *   vip = 10 min, normal = 30 min, slow = 60 min, disabled = never poll.
- * A missing tier is treated as 'normal'. See src/polling.ts.
+ * Polling tier for a watched account (cost control). Intervals in src/polling.ts:
+ *   super_vip = 2 min (manual-only — assign by hand for a hot account),
+ *   vip = 5 min, normal = 15 min, slow = 60 min, disabled = never poll.
+ * A missing tier is treated as 'normal'.
  */
-export type InfluencerTier = 'vip' | 'normal' | 'slow' | 'disabled';
+export type InfluencerTier = 'super_vip' | 'vip' | 'normal' | 'slow' | 'disabled';
 
 /** An influencer we watch, loaded from config. */
 export interface WatchedInfluencer {

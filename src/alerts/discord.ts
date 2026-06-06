@@ -57,43 +57,62 @@ export function cardColor(ev: NewFollow): number {
   return ev.followed.verified ? COLOR_VERIFIED : COLOR_NORMAL;
 }
 
+/** Separator between the followed account and the token CA — space + ・ + space. */
+const SEPARATOR = ' ・ ';
+
 /**
  * Minimal Discord embed — a thin wrapper around the rendered card PNG. All
- * information lives in the image; the embed exists only to (a) attach the image
- * and (b) carry the clickable links Discord can't put on an image:
- *   - influencer handle  -> x.com profile
- *   - followed handle    -> x.com profile
- *   - token short addr   -> Solscan  (high priority only)
+ * information lives in the image; the embed text above it carries only the
+ * clickable links Discord can't put on an image:
+ *   - followed handle -> x.com profile  (bold)
+ *   - shortened CA    -> Solscan        (bold; only when a CA exists)
+ *
+ * Note: the Discord label shows a shortened CA (first 11 + last 11 chars, see
+ * shortenCa) but the link still targets the full address; the card image shows
+ * its own short "CA: HgBR…pump" form (unchanged).
+ *
+ * The watcher account is intentionally omitted here — it already appears inside
+ * the card image. Layout: `**@followed**` or `**@followed** ・ **<ca>**`.
  *
  * `withCard` controls whether embed.image points at the attached card (false
  * when rendering failed, so we don't reference a missing file).
  */
 export function buildEmbed(ev: NewFollow, withCard = true): Record<string, unknown> {
-  const inf = ev.influencer.username;
   const fol = ev.followed.username;
 
-  const parts = [`[@${inf}](${profileUrl(inf)}) → [@${fol}](${profileUrl(fol)})`];
-  const token = ev.classification.highPriority ? caLink(ev) : null;
-  if (token) parts.push(token);
+  let description = `**[@${fol}](${profileUrl(fol)})**`;
+  const token = caLink(ev);
+  if (token) description += `${SEPARATOR}**${token}**`;
 
   const embed: Record<string, unknown> = {
-    description: parts.join('  ·  '),
+    description,
     color: cardColor(ev),
   };
   if (withCard) embed.image = { url: `attachment://${CARD_FILENAME}` };
   return embed;
 }
 
-/** Clickable short CA → Solscan, or null if no contract address. */
+/** Clickable shortened CA → Solscan (full URL), or null if no contract address. */
 function caLink(ev: NewFollow): string | null {
   const addr = findContractAddress(ev.followed);
   if (!addr) return null;
-  const short = `${addr.slice(0, 4)}…${addr.slice(-4)}`;
   const url =
     ev.classification.caSignal === 'launchpad'
       ? `https://solscan.io/token/${addr}`
       : `https://solscan.io/account/${addr}`;
-  return `[${short}](${url})`;
+  // Visible label only is shortened; the hyperlink target stays the full addr.
+  return `[${shortenCa(addr)}](${url})`;
+}
+
+/**
+ * Shorten a CA for the visible Discord label: the first 11 and last 11
+ * characters concatenated directly — no ellipsis, dots, or separator of any
+ * kind. Addresses of 22 chars or fewer are returned unchanged (shortening can't
+ * help and would overlap). The hyperlink still points at the full address.
+ */
+function shortenCa(addr: string): string {
+  if (addr.length <= 22) return addr;
+  return addr.slice(0, 11) + addr.slice(-11);
 }
 
 function profileUrl(username: string): string {

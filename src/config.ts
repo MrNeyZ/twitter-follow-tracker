@@ -17,7 +17,6 @@ dotenv.config();
 //   super_vip = 2m (manual-only), vip = 5m, normal = 15m, slow = 60m,
 //   disabled = never. Missing -> normal.
 export const WATCHED_INFLUENCERS: WatchedInfluencer[] = [
-  { username: '0xuberM', label: 'crypto-watch', tier: 'disabled' },
   { username: 'f1racecar1', label: 'crypto-watch', tier: 'normal' },
   { username: 'reznio_o', label: 'crypto-watch', tier: 'normal' },
   { username: 'diamondARS_', label: 'crypto-watch', tier: 'normal' },

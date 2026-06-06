@@ -160,7 +160,7 @@ to a single hot account.
 ```ts
 export const WATCHED_INFLUENCERS: WatchedInfluencer[] = [
   { username: 'VictoryHell_', label: 'self-test', tier: 'vip' },      // 5 min
-  { username: '0xuberM', label: 'crypto-watch', tier: 'disabled' },   // never
+  { username: 'someAccount', label: 'crypto-watch', tier: 'disabled' }, // never
   { username: 'astaso1', label: 'crypto-watch', tier: 'normal' },     // 15 min
 ];
 ```
@@ -168,7 +168,6 @@ export const WATCHED_INFLUENCERS: WatchedInfluencer[] = [
 **Current configuration:**
 
 - `VictoryHell_` → **vip** (5 min)
-- `0xuberM` → **disabled** (never)
 - all others → **normal** (15 min)
 
 ### Cost model

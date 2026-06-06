@@ -40,9 +40,11 @@ function optionalEnv(name: string, fallback: string): string {
 }
 
 export function loadConfig(): AppConfig {
-  // Scheduler tick. Default 10 = the smallest tier interval (vip), so every tier
-  // is polled on time; a larger tick would under-poll vip and skew the cost log.
-  const pollIntervalMinutes = Number(optionalEnv('POLL_INTERVAL_MINUTES', '10'));
+  // Scheduler tick. Must be <= the smallest tier interval so every tier is
+  // polled on time; a larger tick under-polls the tightest tier. Default 1 so
+  // the vip=2m / normal=5m tiers are honored to the minute (worst-case detection
+  // delay == the tier interval). A larger tick rounds detection up to the tick.
+  const pollIntervalMinutes = Number(optionalEnv('POLL_INTERVAL_MINUTES', '1'));
   if (!Number.isFinite(pollIntervalMinutes) || pollIntervalMinutes <= 0) {
     throw new Error('POLL_INTERVAL_MINUTES must be a positive number');
   }

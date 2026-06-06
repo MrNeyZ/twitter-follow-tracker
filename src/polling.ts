@@ -16,10 +16,16 @@ export const CREDITS_PER_POLL = 60;
  */
 export const GATE_CREDITS = 18;
 
-/** Default poll interval (minutes) per tier. 'disabled' never polls. */
+/**
+ * Default poll interval (minutes) per tier. 'disabled' never polls.
+ * Tightened to low-latency detection once count-gated polling made most cycles
+ * cost only the cheap 18-credit profile read (the 60-credit followings fetch
+ * runs only when the count moves). Requires the scheduler tick
+ * (POLL_INTERVAL_MINUTES) to be <= the smallest interval here.
+ */
 export const TIER_INTERVAL_MINUTES: Record<Exclude<InfluencerTier, 'disabled'>, number> = {
-  vip: 10,
-  normal: 30,
+  vip: 2,
+  normal: 5,
   slow: 60,
 };
 

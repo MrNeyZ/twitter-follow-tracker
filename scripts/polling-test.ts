@@ -37,8 +37,8 @@ assert(effectiveTier({ username: 'a' }) === 'normal', 'missing tier defaults to 
 assert(effectiveTier({ username: 'a', tier: 'vip' }) === 'vip', 'explicit tier is respected');
 
 // --- effective interval ---
-assert(effectiveIntervalMinutes({ username: 'a', tier: 'vip' }) === TIER_INTERVAL_MINUTES.vip, 'vip -> 10m');
-assert(effectiveIntervalMinutes({ username: 'a' }) === TIER_INTERVAL_MINUTES.normal, 'normal -> 30m');
+assert(effectiveIntervalMinutes({ username: 'a', tier: 'vip' }) === TIER_INTERVAL_MINUTES.vip, 'vip -> tier default');
+assert(effectiveIntervalMinutes({ username: 'a' }) === TIER_INTERVAL_MINUTES.normal, 'normal -> tier default');
 assert(effectiveIntervalMinutes({ username: 'a', tier: 'slow' }) === TIER_INTERVAL_MINUTES.slow, 'slow -> 60m');
 assert(effectiveIntervalMinutes({ username: 'a', tier: 'disabled' }) === null, 'disabled -> null (never)');
 assert(
@@ -56,7 +56,8 @@ assert(isDue(minsAgo(9), 10, NOW) === false, 'vip checked 9m ago, 10m interval -
 assert(isDue(minsAgo(11), 10, NOW) === true, 'vip checked 11m ago, 10m interval -> due');
 
 // --- cost estimate ---
-// 1 vip (10m -> 144 polls/day), 2 normal (30m -> 48 polls/day each), 1 disabled (0).
+// 1 vip, 2 normal (n2 has no tier -> normal), 1 disabled (0). Interval-agnostic:
+// expected spend is derived from TIER_INTERVAL_MINUTES so it tracks tier tuning.
 const list: WatchedInfluencer[] = [
   { username: 'vip1', tier: 'vip' },
   { username: 'n1', tier: 'normal' },
@@ -64,8 +65,8 @@ const list: WatchedInfluencer[] = [
   { username: 'off', tier: 'disabled' },
 ];
 const est = estimateCost(list);
-const vipCredits = (1440 / 10) * CREDITS_PER_POLL; // 144 * 60 = 8640
-const normalCredits = 2 * (1440 / 30) * CREDITS_PER_POLL; // 2 * 48 * 60 = 5760
+const vipCredits = (1440 / TIER_INTERVAL_MINUTES.vip) * CREDITS_PER_POLL;
+const normalCredits = 2 * (1440 / TIER_INTERVAL_MINUTES.normal) * CREDITS_PER_POLL;
 assert(est.totalCreditsPerDay === vipCredits + normalCredits, `daily credits = ${vipCredits + normalCredits}`);
 assert(est.totalCreditsPerMonth === est.totalCreditsPerDay * 30, 'monthly = daily * 30');
 const disabledTier = est.perTier.find((t) => t.tier === 'disabled');

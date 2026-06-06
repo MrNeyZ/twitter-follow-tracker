@@ -16,6 +16,8 @@ import {
   isDue,
   estimateCost,
   formatCostEstimate,
+  CREDITS_PER_POLL,
+  GATE_CREDITS,
 } from './polling';
 import {
   loadInfluencerImages,
@@ -46,14 +48,32 @@ function nowIso(): string {
   return new Date().toISOString();
 }
 
+/** Per-cycle API spend tally, used to log the count-gate savings. */
+export interface CycleStats {
+  /** Due influencers actually processed this cycle. */
+  polls: number;
+  /** Count-gate (user/info) reads performed. */
+  gateCalls: number;
+  /** Followings (user/followings) fetches performed. */
+  fetchCalls: number;
+  /** Polls where the gate let us skip the followings fetch. */
+  skips: number;
+}
+
+export function newCycleStats(): CycleStats {
+  return { polls: 0, gateCalls: 0, fetchCalls: 0, skips: 0 };
+}
+
 /** Process a single influencer. Errors are caught by the caller per-influencer. */
-async function processInfluencer(
+export async function processInfluencer(
   inf: WatchedInfluencer,
   cfg: AppConfig,
   db: Db,
   provider: FollowProvider,
   telegram: TelegramAlerter,
-  discord: DiscordAlerter
+  discord: DiscordAlerter,
+  nowMs: number,
+  stats: CycleStats
 ): Promise<void> {
   const label = inf.label ?? inf.username;
 
@@ -75,22 +95,77 @@ async function processInfluencer(
 
   db.upsertWatchedAccount(influencerId, inf);
 
-  // 2. Fetch current following list.
+  // Derive the timestamp from nowMs (the cycle clock) so the re-baseline timer
+  // and stored times share one clock — in production nowMs is Date.now().
+  const isoTime = new Date(nowMs).toISOString();
+  const hasBaseline = db.hasBaseline(influencerId);
+  const gateEnabled =
+    cfg.twitterApiCountGateEnabled && typeof provider.getFollowingCount === 'function';
+
+  // 2. Count gate (cost control): read the cheap profile `following` count and
+  //    skip the 60-credit followings fetch when it hasn't moved — unless a daily
+  //    full re-baseline is due. Providers without getFollowingCount, or with the
+  //    gate disabled, always fetch (currentCount stays null).
+  let currentCount: number | null = null;
+  if (gateEnabled) {
+    stats.gateCalls++;
+    try {
+      currentCount = await provider.getFollowingCount!(influencerId);
+    } catch (err) {
+      errLog(`  ${label}: count gate read failed (fail-open to fetch):`, asMessage(err));
+      currentCount = null;
+    }
+  }
+
+  if (gateEnabled && hasBaseline && currentCount !== null) {
+    const storedCount = db.getFollowingCount(influencerId);
+    const rebaselineDue = isDue(
+      db.getLastFullFollowingsCheckAt(influencerId),
+      cfg.twitterApiFullRebaselineHours * 60,
+      nowMs
+    );
+    if (storedCount !== null && currentCount === storedCount && !rebaselineDue) {
+      db.markChecked(influencerId, isoTime);
+      stats.skips++;
+      log(`  ${label}: COUNT_UNCHANGED_SKIP (following=${currentCount})`);
+      return;
+    }
+    if (storedCount !== null && currentCount === storedCount && rebaselineDue) {
+      log(
+        `  ${label}: FULL_REBASELINE_FETCH (following=${currentCount}, ` +
+          `≥${cfg.twitterApiFullRebaselineHours}h since last full fetch)`
+      );
+    } else {
+      log(`  ${label}: COUNT_CHANGED_FETCH (following ${storedCount ?? '∅'} -> ${currentCount})`);
+    }
+  } else if (gateEnabled && hasBaseline && currentCount === null) {
+    log(`  ${label}: COUNT_CHANGED_FETCH (gate read failed — fail-open fetch)`);
+  }
+
+  // 3. Fetch current following list (baseline / count changed / re-baseline /
+  //    gating disabled). After any full fetch we record the profile count we
+  //    gated on and reset the re-baseline timer.
   const following = await provider.getFollowing(influencerId);
+  stats.fetchCalls++;
   log(`  ${label}: following count = ${following.length}`);
 
-  const isoTime = nowIso();
+  const persistGateState = (): void => {
+    if (!gateEnabled) return;
+    if (currentCount !== null) db.setFollowingCount(influencerId, currentCount);
+    db.markFullFollowingsCheck(influencerId, isoTime);
+  };
 
-  // 3. First successful run -> save baseline, do NOT alert.
-  if (!db.hasBaseline(influencerId)) {
+  // 4. First successful run -> save baseline, do NOT alert.
+  if (!hasBaseline) {
     db.replaceFollowingSnapshot(influencerId, following, isoTime);
     db.markBaselineDone(influencerId);
+    persistGateState();
     db.markChecked(influencerId, isoTime);
     log(`  ${label}: baseline saved (${following.length} accounts), no alerts sent`);
     return;
   }
 
-  // 4. Subsequent runs -> diff against stored snapshot.
+  // 5. Subsequent runs -> diff against stored snapshot.
   const knownIds = db.getCurrentFollowingIds(influencerId);
   const newlyFollowed: SorsaUser[] = following.filter(
     (u) => u.id && !knownIds.has(u.id)
@@ -100,9 +175,10 @@ async function processInfluencer(
 
   // Keep the snapshot fresh so these aren't re-detected next cycle.
   db.addToFollowingSnapshot(influencerId, newlyFollowed, isoTime);
+  persistGateState();
   db.markChecked(influencerId, isoTime);
 
-  // 5 + 6. Record + score + classify each new follow, dedupe via follow_events,
+  // 6. Record + score + classify each new follow, dedupe via follow_events,
   // then alert only if it looks like a project (projectScore >= threshold).
   for (const followed of newlyFollowed) {
     try {
@@ -178,7 +254,7 @@ async function dispatchAlerts(
   });
 }
 
-async function runCycle(
+export async function runCycle(
   cfg: AppConfig,
   db: Db,
   provider: FollowProvider,
@@ -190,6 +266,8 @@ async function runCycle(
   if (cfg.influencers.length === 0) {
     log('No influencers configured. Add entries to WATCHED_INFLUENCERS in src/config.ts.');
   }
+
+  const stats = newCycleStats();
 
   // Tiered polling: the worker ticks on a fixed schedule, but each account is
   // only polled once its own tier interval has elapsed since last_checked_at.
@@ -218,14 +296,33 @@ async function runCycle(
         `Processing @${inf.username}${inf.label ? ` (${inf.label})` : ''} ` +
           `[tier=${tier}, interval=${intervalMinutes}m]`
       );
-      await processInfluencer(inf, cfg, db, provider, telegram, discord);
+      stats.polls++;
+      await processInfluencer(inf, cfg, db, provider, telegram, discord, nowMs, stats);
     } catch (err) {
       // Isolate failures so one bad influencer never crashes the worker.
       errLog(`Influencer "${label}" failed:`, asMessage(err));
     }
   }
 
+  for (const line of formatCycleSpend(stats)) log(line);
   log(`=== cycle end ===`);
+}
+
+/**
+ * Per-cycle credit accounting: what we actually spent (gate reads + followings
+ * fetches) vs. the ungated baseline (every processed poll fetching followings),
+ * and the savings the count-gate produced this cycle.
+ */
+export function formatCycleSpend(stats: CycleStats): string[] {
+  const actual = stats.gateCalls * GATE_CREDITS + stats.fetchCalls * CREDITS_PER_POLL;
+  const ungated = stats.polls * CREDITS_PER_POLL;
+  const saved = ungated - actual;
+  const pct = ungated > 0 ? Math.round((saved / ungated) * 100) : 0;
+  return [
+    `credits: ${stats.gateCalls} gate×${GATE_CREDITS} + ${stats.fetchCalls} fetch×${CREDITS_PER_POLL} ` +
+      `= ${actual} (${stats.skips} skipped); ungated baseline = ${ungated}; ` +
+      `saved = ${saved} (${pct}%)`,
+  ];
 }
 
 function asMessage(err: unknown): string {
@@ -285,7 +382,11 @@ async function main(): Promise<void> {
   }
 }
 
-main().catch((err) => {
-  errLog('Fatal error:', asMessage(err));
-  process.exit(1);
-});
+// Only auto-run the worker when executed directly (`node dist/index.js`), so the
+// module can be imported by tests/dry-runs without starting the polling loop.
+if (require.main === module) {
+  main().catch((err) => {
+    errLog('Fatal error:', asMessage(err));
+    process.exit(1);
+  });
+}

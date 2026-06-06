@@ -9,6 +9,13 @@ import { WatchedInfluencer, InfluencerTier } from './types';
 /** Every followings poll bills 60 credits (20 users x 3 credits — the floor). */
 export const CREDITS_PER_POLL = 60;
 
+/**
+ * A profile (`/twitter/user/info`) read bills 18 credits ($0.18 / 1k profiles).
+ * This is the cost of the count-gate check that can skip a 60-credit followings
+ * fetch when the account's following count hasn't moved.
+ */
+export const GATE_CREDITS = 18;
+
 /** Default poll interval (minutes) per tier. 'disabled' never polls. */
 export const TIER_INTERVAL_MINUTES: Record<Exclude<InfluencerTier, 'disabled'>, number> = {
   vip: 10,

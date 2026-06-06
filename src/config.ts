@@ -65,6 +65,18 @@ export function loadConfig(): AppConfig {
     throw new Error('TWITTERAPI_PAGE_SIZE must be a positive integer');
   }
 
+  // Count-gated polling (cost control): before the 60-credit followings fetch,
+  // read the cheap (18-credit) profile `following` count and skip the fetch when
+  // it hasn't moved. A full followings fetch is still forced every
+  // TWITTERAPI_FULL_REBASELINE_HOURS to catch same-interval follow+unfollow churn
+  // (which leaves the net count unchanged) and to refresh the snapshot.
+  const twitterApiCountGateEnabled =
+    optionalEnv('TWITTERAPI_COUNT_GATE_ENABLED', 'true').toLowerCase() === 'true';
+  const twitterApiFullRebaselineHours = Number(optionalEnv('TWITTERAPI_FULL_REBASELINE_HOURS', '24'));
+  if (!Number.isFinite(twitterApiFullRebaselineHours) || twitterApiFullRebaselineHours <= 0) {
+    throw new Error('TWITTERAPI_FULL_REBASELINE_HOURS must be a positive number');
+  }
+
   // Only the selected provider's API key is required; the other stays optional
   // so a twitterapi.io-only setup doesn't need a Sorsa key (and vice versa).
   return {
@@ -78,6 +90,8 @@ export function loadConfig(): AppConfig {
         : optionalEnv('TWITTERAPI_IO_KEY', ''),
     twitterApiIoBaseUrl: optionalEnv('TWITTERAPI_IO_BASE_URL', 'https://api.twitterapi.io'),
     twitterApiPageSize,
+    twitterApiCountGateEnabled,
+    twitterApiFullRebaselineHours,
     telegramBotToken: requireEnv('TELEGRAM_BOT_TOKEN'),
     telegramChatId: requireEnv('TELEGRAM_CHAT_ID'),
     discordWebhookUrl: requireEnv('DISCORD_WEBHOOK_URL'),

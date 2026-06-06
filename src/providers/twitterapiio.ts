@@ -84,6 +84,24 @@ export class TwitterApiIoProvider implements FollowProvider {
     const list = Array.isArray(data?.followings) ? data.followings : [];
     return list.map(normalizeUser);
   }
+
+  /**
+   * Cheap count-gate read: GET /twitter/user/info (18 credits) and return the
+   * account's `following` count. Used to decide whether the 60-credit followings
+   * fetch is needed this cycle. Returns null if the field is missing/unparseable
+   * (caller treats null as "can't gate" and fetches followings).
+   *
+   * The response wraps the user under `data` (`{ status, data: {...} }`) but some
+   * shapes return it flat, so we accept either.
+   */
+  async getFollowingCount(userIdOrUsername: string): Promise<number | null> {
+    const userName = stripAt(userIdOrUsername);
+    const data = await this.request('/twitter/user/info', { userName });
+    const u = data && typeof data === 'object' && data.data ? data.data : data;
+    const raw = u?.following ?? u?.followingCount ?? u?.friends_count;
+    const n = Number(raw);
+    return Number.isFinite(n) ? n : null;
+  }
 }
 
 function stripAt(s: string): string {

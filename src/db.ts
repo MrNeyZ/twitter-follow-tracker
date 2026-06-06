@@ -55,6 +55,27 @@ export class Db {
         PRIMARY KEY (influencer_id, followed_user_id)
       );
     `);
+    this.migrate();
+  }
+
+  /**
+   * Idempotent, additive migrations. SQLite has no `ADD COLUMN IF NOT EXISTS`,
+   * so we check PRAGMA table_info and ALTER only when the column is missing.
+   * Safe to run on every startup.
+   */
+  private migrate(): void {
+    // Count-gated polling (cost control): remember the last profile following
+    // count we acted on, and when we last did a full followings re-baseline.
+    this.addColumnIfMissing('watched_accounts', 'following_count', 'INTEGER');
+    this.addColumnIfMissing('watched_accounts', 'last_full_followings_check_at', 'TEXT');
+  }
+
+  /** Add a column to a table only if it isn't already present (idempotent). */
+  private addColumnIfMissing(table: string, column: string, ddl: string): void {
+    const cols = this.db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+    if (!cols.some((c) => c.name === column)) {
+      this.db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${ddl}`);
+    }
   }
 
   /** Upsert a watched account row (keyed by resolved influencer id). */
@@ -103,6 +124,41 @@ export class Db {
       .prepare(`SELECT last_checked_at FROM watched_accounts WHERE username = ?`)
       .get(username) as { last_checked_at: string | null } | undefined;
     return row?.last_checked_at ?? null;
+  }
+
+  /**
+   * Last profile `following` count we acted on for this influencer (the value
+   * the count-gate compares against), or null if not yet recorded.
+   */
+  getFollowingCount(influencerId: string): number | null {
+    const row = this.db
+      .prepare(`SELECT following_count FROM watched_accounts WHERE influencer_id = ?`)
+      .get(influencerId) as { following_count: number | null } | undefined;
+    return row?.following_count ?? null;
+  }
+
+  /** Store the profile following count gated on (called after a full fetch). */
+  setFollowingCount(influencerId: string, count: number): void {
+    this.db
+      .prepare(`UPDATE watched_accounts SET following_count = ? WHERE influencer_id = ?`)
+      .run(count, influencerId);
+  }
+
+  /** When we last did a full followings fetch (re-baseline) for this account. */
+  getLastFullFollowingsCheckAt(influencerId: string): string | null {
+    const row = this.db
+      .prepare(`SELECT last_full_followings_check_at FROM watched_accounts WHERE influencer_id = ?`)
+      .get(influencerId) as { last_full_followings_check_at: string | null } | undefined;
+    return row?.last_full_followings_check_at ?? null;
+  }
+
+  /** Record that a full followings fetch happened (resets the re-baseline timer). */
+  markFullFollowingsCheck(influencerId: string, isoTime: string): void {
+    this.db
+      .prepare(
+        `UPDATE watched_accounts SET last_full_followings_check_at = ? WHERE influencer_id = ?`
+      )
+      .run(isoTime, influencerId);
   }
 
   /** Returns the set of followed_user_ids currently stored for an influencer. */

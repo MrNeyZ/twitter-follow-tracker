@@ -25,6 +25,14 @@ export interface SorsaUser {
 export interface FollowProvider {
   getUserByUsername(username: string): Promise<SorsaUser>;
   getFollowing(userId: string): Promise<SorsaUser[]>;
+  /**
+   * Optional cheap profile read returning the account's *following* count, used
+   * to gate the (more expensive) getFollowing call: if the count hasn't moved
+   * since last cycle we can skip the followings fetch. Returns null if the count
+   * can't be determined. Providers that don't implement this are never gated
+   * (the worker always fetches followings for them).
+   */
+  getFollowingCount?(userId: string): Promise<number | null>;
 }
 
 /**
@@ -112,6 +120,10 @@ export interface AppConfig {
   twitterApiIoKey: string;
   twitterApiIoBaseUrl: string;
   twitterApiPageSize: number;
+  /** Gate the followings fetch behind a cheap profile following-count check. */
+  twitterApiCountGateEnabled: boolean;
+  /** Force a full followings fetch at least every N hours per influencer. */
+  twitterApiFullRebaselineHours: number;
   telegramBotToken: string;
   telegramChatId: string;
   discordWebhookUrl: string;
